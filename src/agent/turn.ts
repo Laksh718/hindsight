@@ -68,7 +68,12 @@ export async function runTurn(deps: AgentDeps, input: TurnInput, emit: (e: Agent
   // 1. Persist the question first, so nothing the user said is ever lost.
   let conversation = input.conversationId ? store.get(input.conversationId) : undefined;
   conversation ??= await store.create({ at, tz, simulated: input.simulated });
-  const user = await store.addMessage(conversation.id, { role: 'user', content: input.text, at });
+  // A retry of a question that got no answer reuses it instead of asking twice.
+  const last = conversation.messages.at(-1);
+  const user =
+    last?.role === 'user' && last.content === input.text
+      ? last
+      : await store.addMessage(conversation.id, { role: 'user', content: input.text, at });
   emit({ type: 'start', conversationId: conversation.id, title: conversation.title, user });
 
   // 2. Recall, in code, before the model runs.
