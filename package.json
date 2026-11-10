@@ -1,0 +1,37 @@
+{
+  "name": "hindsight",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A chat agent with web search and a dated memory. It remembers what it told you, and checks whether it is still true.",
+  "type": "module",
+  "engines": {
+    "node": ">=20.6"
+  },
+  "scripts": {
+    "dev": "tsx watch --clear-screen=false src/server.ts",
+    "start": "tsx src/server.ts",
+    "test": "tsx --test test/*.test.ts",
+    "typecheck": "tsc --noEmit",
+    "seed": "tsx scripts/seed.ts",
+    "pages": "tsx scripts/build-pages.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Laksh718/hindsight.git"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@hono/node-server": "^2.1.6",
+    "chrono-node": "^2.10.3",
+    "dompurify": "^3.4.17",
+    "dotenv": "^18.0.10",
+    "hono": "^4.13.17",
+    "marked": "^18.2.0",
+    "minisearch": "^7.2.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}

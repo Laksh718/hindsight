@@ -1,0 +1,16 @@
+# dependencies
+node_modules/
+
+# secrets: real keys live in .env, which is never committed
+.env
+.env.*
+!.env.example
+
+# runtime data: your conversations and the claim ledger stay on your machine
+data/
+
+# tool state and OS noise
+.hallmark/
+*.log
+.DS_Store
+coverage/
