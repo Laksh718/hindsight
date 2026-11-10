@@ -1,52 +1,86 @@
 /**
- * HTTP server: a JSON API, one streaming endpoint, and the static UI.
+ * The HTTP app: a JSON API and one streaming endpoint. No listening here.
+ *
+ *   src/dev.ts runs it locally (plus the static UI from public/).
+ *   On Vercel, this file's default export is the function; public/ is
+ *   served by the CDN. Same code, two hosts.
  *
  * POST /api/chat streams newline-delimited JSON events (see AgentEvent).
  * NDJSON rather than SSE because the request is a POST (EventSource only does
- * GET), and because a recorded stream is a plain file the UI can replay,
- * which is how the GitHub Pages demo works with no server at all.
+ * GET), and because a recorded stream is a plain file the UI can replay.
+ *
+ * Memory by host:
+ *   local          one user, data/memory.json
+ *   Vercel + Redis one memory per visitor (an anonymous id the browser keeps)
+ *   Vercel alone   per visitor, but only while the function instance lives
  */
-import { readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
-import path from 'node:path';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
+import { cors } from 'hono/cors';
 import { stream } from 'hono/streaming';
-import { serve } from '@hono/node-server';
-import { serveStatic } from '@hono/node-server/serve-static';
 import { config, setupProblems } from './config.ts';
 import { LlmClient } from './llm/client.ts';
 import { MemoryStore } from './memory/store.ts';
 import { Recaller } from './memory/recall.ts';
+import { RedisPersistence, VolatilePersistence } from './memory/persistence.ts';
 import { TavilySearch } from './search/tavily.ts';
 import { runTurn, type AgentEvent } from './agent/turn.ts';
 import { isValidTimeZone } from './time.ts';
 
-const root = fileURLToPath(new URL('..', import.meta.url));
-const store = await new MemoryStore(config.dataDir).load();
-const recaller = new Recaller(store);
 const llm = config.llm ? new LlmClient(config.llm) : null;
 const search = config.tavilyKey ? new TavilySearch(config.tavilyKey) : null;
 
+type MemoryMode = 'file' | 'redis' | 'volatile';
+const memoryMode: MemoryMode = config.redis ? 'redis' : config.hosted ? 'volatile' : 'file';
+
+let localStore: Promise<MemoryStore> | null = null;
+const volatileStores = new Map<string, MemoryStore>();
+
+/** The visitor's memory. Locally there is one user; hosted, the browser sends an anonymous id. */
+async function memoryFor(c: Context): Promise<{ store: MemoryStore; recaller: Recaller }> {
+  let store: MemoryStore;
+  if (memoryMode === 'file') {
+    localStore ??= new MemoryStore(config.dataDir).load();
+    store = await localStore;
+  } else {
+    const raw = c.req.header('x-hindsight-user') ?? '';
+    const user = /^[a-zA-Z0-9-]{8,64}$/.test(raw) ? raw : 'anonymous';
+    if (memoryMode === 'redis') {
+      // Fresh read per request: another function instance may have written since.
+      store = await new MemoryStore(new RedisPersistence(config.redis!.url, config.redis!.token, `hindsight:user:${user}`)).load();
+    } else {
+      if (!volatileStores.has(user)) volatileStores.set(user, await new MemoryStore(new VolatilePersistence()).load());
+      store = volatileStores.get(user)!;
+    }
+  }
+  return { store, recaller: new Recaller(store) };
+}
+
 const app = new Hono();
 
-app.get('/api/status', (c) =>
-  c.json({
+// The GitHub Pages copy of the UI calls this API from another origin.
+app.use('/api/*', cors({ origin: config.corsOrigins.includes('*') ? '*' : config.corsOrigins, allowHeaders: ['content-type', 'x-hindsight-user'], maxAge: 600 }));
+
+app.get('/api/status', async (c) => {
+  const { store } = await memoryFor(c);
+  return c.json({
     ready: !!llm && !!search,
     problems: setupProblems(),
     model: config.llm ? { provider: config.llm.label, model: config.llm.model } : null,
     search: search ? 'Tavily' : null,
+    memory: memoryMode,
     conversations: store.all().length,
-  }),
-);
+  });
+});
 
-app.get('/api/conversations', (c) => c.json(store.list()));
+app.get('/api/conversations', async (c) => c.json((await memoryFor(c)).store.list()));
 
-app.get('/api/conversations/:id', (c) => {
-  const conv = store.get(c.req.param('id'));
+app.get('/api/conversations/:id', async (c) => {
+  const conv = (await memoryFor(c)).store.get(c.req.param('id'));
   return conv ? c.json(conv) : c.json({ error: 'Not found' }, 404);
 });
 
 app.delete('/api/conversations/:id', async (c) => {
+  const { store } = await memoryFor(c);
   const ok = await store.delete(c.req.param('id'));
   return ok ? c.body(null, 204) : c.json({ error: 'Not found' }, 404);
 });
@@ -70,6 +104,7 @@ app.post('/api/chat', async (c) => {
   const tz = isValidTimeZone(body?.tz) ? body.tz : 'UTC';
   const clock = resolveClock(body?.now);
   if ('error' in clock) return c.json({ error: clock.error }, 400);
+  const { store, recaller } = await memoryFor(c);
 
   c.header('content-type', 'application/x-ndjson; charset=utf-8');
   c.header('cache-control', 'no-cache, no-transform');
@@ -94,29 +129,9 @@ app.post('/api/chat', async (c) => {
       emit({ type: 'error', message: 'Something went wrong on the server. Please try again.', retryable: true });
     }
     await chain;
+    await store.flush(); // a serverless function may freeze once the response ends
   });
 });
 
-// The UI: plain HTML, CSS and ES modules, no build step.
-const vendor: Record<string, string> = {
-  '/vendor/marked.js': 'node_modules/marked/lib/marked.esm.js',
-  '/vendor/purify.js': 'node_modules/dompurify/dist/purify.es.mjs',
-};
-for (const [route, file] of Object.entries(vendor)) {
-  app.get(route, async (c) => {
-    c.header('content-type', 'text/javascript; charset=utf-8');
-    c.header('cache-control', 'public, max-age=86400');
-    return c.body(await readFile(path.join(root, file), 'utf8'));
-  });
-}
-app.use('/*', serveStatic({ root: path.relative(process.cwd(), path.join(root, 'public')) || '.' }));
-
-serve({ fetch: app.fetch, port: config.port }, (info) => {
-  const problems = setupProblems();
-  console.log(`\n  Hindsight is running at http://localhost:${info.port}\n`);
-  if (config.llm) console.log(`  model   ${config.llm.label} · ${config.llm.model}`);
-  console.log(`  search  ${search ? 'Tavily' : 'not configured'}`);
-  console.log(`  memory  ${config.dataDir} (${store.all().length} conversations)\n`);
-  for (const p of problems) console.log(`  ! ${p}`);
-  if (problems.length) console.log('');
-});
+export default app;
+export { memoryMode };

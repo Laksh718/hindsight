@@ -39,6 +39,15 @@ This runs two real conversations with the clock moved back: Postgres hosting "la
 
 You can also move the clock yourself: click the date in the top bar.
 
+## Deploy on Vercel
+
+1. Import the repo in Vercel. It detects Hono; no settings to change.
+2. Add environment variables: `GEMINI_API_KEY`, `TAVILY_API_KEY`.
+3. Storage tab, add **Upstash Redis** (free) and connect it. This gives each visitor a persistent memory. Without it, memory lasts only while a function instance is warm.
+4. Deploy. Keys stay on the server, and the browser never sees them.
+
+To point the GitHub Pages copy at it: `HINDSIGHT_API=https://<your-app>.vercel.app npm run pages`, then commit `docs/`.
+
 ## Scripts
 
 | Command | Does |

@@ -118,11 +118,23 @@ function resolveLlm(): LlmConfig | null {
   };
 }
 
+/** Upstash Redis over REST. Vercel's marketplace integration sets the KV_* names. */
+function resolveRedis(): { url: string; token: string } | null {
+  const url = env('UPSTASH_REDIS_REST_URL') ?? env('KV_REST_API_URL');
+  const token = env('UPSTASH_REDIS_REST_TOKEN') ?? env('KV_REST_API_TOKEN');
+  return url && token ? { url, token } : null;
+}
+
 export const config = {
   port: Number(env('PORT') ?? 3000),
   dataDir: path.resolve(env('DATA_DIR') ?? 'data'),
   llm: resolveLlm(),
   tavilyKey: env('TAVILY_API_KEY'),
+  redis: resolveRedis(),
+  /** Running on a host with no writable disk (Vercel sets VERCEL=1). */
+  hosted: !!env('VERCEL'),
+  /** Origins allowed to call the API from a browser, e.g. the GitHub Pages site. */
+  corsOrigins: list(env('CORS_ORIGINS') ?? '*'),
 };
 
 /** What is missing, phrased for the person setting it up. Empty when ready. */
@@ -136,5 +148,6 @@ export function setupProblems(): string[] {
     );
   }
   if (!config.tavilyKey) problems.push('No search key. Add TAVILY_API_KEY to .env (free at https://app.tavily.com).');
+  if (config.hosted && !config.redis) problems.push('No memory store: conversations last only while this server instance lives. Add Upstash Redis (free) from the Vercel Storage tab.');
   return problems;
 }

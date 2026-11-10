@@ -6,13 +6,15 @@
 
 ```
 src/
-  server.ts                 HTTP: JSON API, the NDJSON chat stream, static UI
+  app.ts                    HTTP: JSON API and the NDJSON chat stream (Vercel's entry)
+  dev.ts                    local runner: app.ts plus the static UI
   config.ts                 env → provider presets (Gemini, Groq, Claude, OpenAI, OpenRouter, custom)
   time.ts                   day keys in the user's zone, date-phrase resolution, the prompt calendar
   types.ts                  Conversation, Message, Source, Claim
   llm/client.ts             streaming chat-completions client and SSE parser, no SDK
   search/tavily.ts          Tavily search with a 10-minute cache
-  memory/store.ts           JSON-file persistence with atomic writes
+  memory/store.ts           conversations and claims, saved as one snapshot
+  memory/persistence.ts     where the snapshot goes: a file locally, Upstash Redis on Vercel
   memory/recall.ts          which past conversations the model sees this turn
   agent/turn.ts             one turn: save → recall → model/search loop → save → ledger
   agent/prompt.ts           the system prompt and how history is replayed
@@ -32,7 +34,7 @@ docs/                       GitHub Pages: the UI in replay mode, plus the record
 Suppose the user types *"Last Tuesday I asked you about Postgres hosting. Has any pricing changed since then?"* on Tuesday 10 November.
 
 1. **The browser** (`public/app.js` → `ask()`) posts `{message, conversationId, tz, now?}` to `/api/chat`. `tz` comes from `Intl`. `now` is sent only when the user has moved the clock (time travel).
-2. **The server** (`src/server.ts`) validates the input, resolves the clock, and opens an NDJSON stream. Each `emit(event)` from the agent becomes one JSON line, written in order through a promise chain, so a slow client never blocks the agent. If the browser disconnects, an `AbortController` cancels the model and search requests.
+2. **The server** (`src/app.ts`) validates the input, resolves the clock, and opens an NDJSON stream. Each `emit(event)` from the agent becomes one JSON line, written in order through a promise chain, so a slow client never blocks the agent. If the browser disconnects, an `AbortController` cancels the model and search requests.
 3. **Save first** (`agent/turn.ts`). The question is written to memory before anything can fail, so nothing the user said is ever lost. A retry of an unanswered question reuses it instead of duplicating it.
 4. **Recall** (`memory/recall.ts`). `resolveDates` turns "Last Tuesday" into `2026-11-03`. Every conversation active that day is pulled in, ordered by topic match. The result is emitted as a `recall` event, which the UI shows as "Dated: 'Last Tuesday' as Tue 3 Nov 2026" and "Recalled: Managed Postgres hosting prices".
 5. **The prompt** (`agent/prompt.ts`) is assembled in this order: the rules, the date and a 14-day calendar, the resolved dates, an index of all past conversations, then `<memory>` with the recalled transcripts and their recorded claims.
@@ -78,8 +80,11 @@ It has a free tier (the challenge setup asked for free keys), it is fast, and it
 ### Why Tavily?
 It returns clean excerpts and publish dates in one call, supports a date filter, and has a 1,000-search free tier. Search sits behind a `SearchProvider` interface, so Brave or Exa would be one more class.
 
-### Why a JSON file and not a database?
-One user, at most a few thousand messages, and `npm install` must work everywhere, with no native builds. Writes are atomic (temp file plus rename) and serialised. The store is a small class; replacing it with Postgres touches one file.
+### Why a JSON snapshot and not a database?
+One user has at most a few thousand messages, and `npm install` must work everywhere, with no native builds. The store keeps memory in process and saves the whole snapshot through a `Persistence`. Locally that is `data/memory.json` (atomic writes). On Vercel, where functions have no disk, it is one Upstash Redis key per visitor, over REST: no driver, no connection pool. Postgres would be a third `Persistence`.
+
+### How does it run on Vercel?
+`src/app.ts` exports the Hono app and does not listen. Vercel detects it and turns it into a streaming function, and serves `public/` from its CDN. `src/dev.ts` is the local runner: the same app plus `serveStatic`. Keys are Vercel environment variables and never reach the browser. The browser sends an anonymous id (`x-hindsight-user`) so each visitor gets their own memory. The GitHub Pages copy of the UI can call the Vercel API (CORS is on for `/api/*`).
 
 ### Why NDJSON and not SSE or WebSockets?
 The request is a POST, and `EventSource` only does GET. NDJSON over `fetch` is about 15 lines to parse. A recorded stream is a file, and the GitHub Pages demo replays exactly that file through the same UI code (`ReplayApi` in `public/api.js`).

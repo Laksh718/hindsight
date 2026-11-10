@@ -21,37 +21,58 @@ async function* readNdjson(body) {
   }
 }
 
+/** An anonymous id for this browser, so a hosted server keeps each visitor's memory apart. */
+function visitorId() {
+  try {
+    let id = localStorage.getItem('hindsight.visitor');
+    if (!id) localStorage.setItem('hindsight.visitor', (id = crypto.randomUUID()));
+    return id;
+  } catch {
+    return 'anonymous';
+  }
+}
+
 export class LiveApi {
   live = true;
 
+  /** `base` is '' for the same origin, or a full URL such as a Vercel deployment. */
+  constructor(base = '') {
+    this.base = base.replace(/\/$/, '');
+    this.headers = { 'x-hindsight-user': visitorId() };
+  }
+
+  url(p) {
+    return this.base ? `${this.base}/${p}` : p;
+  }
+
   async status() {
-    const r = await fetch('api/status');
+    const r = await fetch(this.url('api/status'), { headers: this.headers });
     if (!r.ok) throw new Error(`Server answered ${r.status}`);
     return r.json();
   }
 
   async conversations() {
-    const r = await fetch('api/conversations');
+    const r = await fetch(this.url('api/conversations'), { headers: this.headers });
     if (!r.ok) throw new Error(`Server answered ${r.status}`);
     return r.json();
   }
 
   async conversation(id) {
-    const r = await fetch(`api/conversations/${encodeURIComponent(id)}`);
+    const r = await fetch(this.url(`api/conversations/${encodeURIComponent(id)}`), { headers: this.headers });
     if (r.status === 404) return null;
     if (!r.ok) throw new Error(`Server answered ${r.status}`);
     return r.json();
   }
 
   async remove(id) {
-    await fetch(`api/conversations/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    await fetch(this.url(`api/conversations/${encodeURIComponent(id)}`), { method: 'DELETE', headers: this.headers });
   }
 
   /** Yields AgentEvents as they arrive. */
   async *chat({ conversationId, message, now, tz, signal }) {
-    const r = await fetch('api/chat', {
+    const r = await fetch(this.url('api/chat'), {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...this.headers },
       body: JSON.stringify({ conversationId, message, now, tz }),
       signal,
     });

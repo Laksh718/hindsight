@@ -1,55 +1,46 @@
 /**
- * Durable memory: one JSON file.
+ * Memory: conversations, their messages and the claim ledger.
  *
- * Why not SQLite or a vector DB? This is a single-user agent with, at most, a
- * few thousand messages. A JSON file loads in milliseconds, needs no native
- * build step (`npm install` just works on every machine), and you can open it
- * and read exactly what the agent remembers. The store is a small interface,
- * so swapping in Postgres later touches this file only.
+ * Why not SQLite or a vector DB? One user has at most a few thousand
+ * messages. Holding them in memory and saving a snapshot is fast, needs no
+ * native build step (`npm install` just works), and the saved JSON is
+ * readable: you can open it and see exactly what the agent remembers.
+ * Where the snapshot goes is a Persistence (file locally, Redis on Vercel).
  *
- * Writes go to a temp file and are renamed into place, so a crash mid-write
- * never corrupts memory. Writes are serialised through one promise chain.
+ * Writes are serialised through one promise chain, so they land in order.
  */
-import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import type { Claim, Conversation, ConversationSummary, Message } from '../types.ts';
-
-interface FileShape {
-  version: 1;
-  conversations: Conversation[];
-}
+import { FilePersistence, type Persistence, type Snapshot } from './persistence.ts';
 
 export class MemoryStore {
   private conversations = new Map<string, Conversation>();
   private writing: Promise<void> = Promise.resolve();
-  private readonly file: string;
+  private readonly persistence: Persistence;
   /** Bumped on every change, so derived indexes know when to rebuild. */
   revision = 0;
 
-  constructor(dir: string) {
-    this.file = path.join(dir, 'memory.json');
+  /** A directory (stores data/memory.json there) or any Persistence. */
+  constructor(where: string | Persistence) {
+    this.persistence = typeof where === 'string' ? new FilePersistence(path.join(where, 'memory.json')) : where;
   }
 
   async load(): Promise<this> {
-    await mkdir(path.dirname(this.file), { recursive: true });
-    try {
-      const data = JSON.parse(await readFile(this.file, 'utf8')) as FileShape;
-      for (const c of data.conversations ?? []) this.conversations.set(c.id, { ...c, claims: c.claims ?? [] });
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
-    }
+    const data = await this.persistence.load();
+    for (const c of data?.conversations ?? []) this.conversations.set(c.id, { ...c, claims: c.claims ?? [] });
     return this;
   }
 
   private persist(): Promise<void> {
     this.revision++;
-    const snapshot: FileShape = { version: 1, conversations: [...this.conversations.values()] };
-    this.writing = this.writing.then(async () => {
-      const tmp = `${this.file}.${process.pid}.tmp`;
-      await writeFile(tmp, JSON.stringify(snapshot, null, 1));
-      await rename(tmp, this.file);
-    });
+    const snapshot: Snapshot = { version: 1, conversations: [...this.conversations.values()] };
+    this.writing = this.writing.then(() => this.persistence.save(snapshot));
+    return this.writing;
+  }
+
+  /** Resolves once every pending write has landed. */
+  flush(): Promise<void> {
     return this.writing;
   }
 

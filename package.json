@@ -8,8 +8,8 @@
     "node": ">=20.6"
   },
   "scripts": {
-    "dev": "tsx watch --clear-screen=false src/server.ts",
-    "start": "tsx src/server.ts",
+    "dev": "tsx watch --clear-screen=false src/dev.ts",
+    "start": "tsx src/dev.ts",
     "test": "tsx --test test/*.test.ts",
     "typecheck": "tsc --noEmit",
     "seed": "tsx scripts/seed.ts",

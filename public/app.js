@@ -10,8 +10,9 @@ import { LiveApi, ReplayApi } from './api.js';
 import { el, esc, renderAnswer, sourcesTable, ledgerTable, citedNumbers } from './render.js';
 
 const $ = (sel) => document.querySelector(sel);
-const replayBase = document.documentElement.dataset.replay;
-const api = replayBase ? new ReplayApi(replayBase) : new LiveApi();
+// Same UI, three back ends: this server, a hosted API (data-api), or a recording (data-replay).
+const { replay: replayBase, api: apiBase } = document.documentElement.dataset;
+const api = replayBase ? new ReplayApi(replayBase) : new LiveApi(apiBase ?? '');
 const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
 const state = {
