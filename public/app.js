@@ -579,10 +579,11 @@ function cosmosTarget() {
   const welcome = document.body.dataset.view === 'welcome';
   const focused = composer.matches(':focus-within');
   const goal = {
+    lens: welcome ? 2200 : 1000,
     reach: welcome ? 240 : 90,
     glow: welcome ? 1 : 0.55,
     // The flow quickens while the agent works: the sky shows it is thinking.
-    energy: (state.busy ? 3.2 : 1) * (welcome ? 1 : 0.7),
+    energy: state.busy ? 4 : 1,
     focus: focused ? 1 : 0,
   };
   const t = (cosmosTarget.now ??= { ...goal });

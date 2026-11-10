@@ -1,23 +1,18 @@
 /**
- * The backdrop: a starfield lensed around the composer, as if it were a heavy object.
+ * The backdrop: a starfield bent around the composer, as if it were heavy.
  *
- * WebGL, one full-screen fragment shader. For each pixel:
- *   1. Signed distance d to the composer's rounded rectangle, and s, the
- *      position along its outline (arc length). Together (s, d) are "orbit
- *      coordinates" that follow the composer's shape exactly.
- *   2. Near the rim, stars live in orbit coordinates: they flow along s
- *      (faster when closer), are smeared along s into streaks, and crowd
- *      toward the edge (d is compressed). That is the lensing look.
- *   3. Further out, an ordinary starfield in three depth layers, displaced a
- *      little toward the composer, shifted by the pointer for parallax, and
- *      bent around the pointer as a second, small gravity well.
- *   4. A thin bright rim and a faint halo hug the edge.
+ * WebGL, one full-screen fragment shader, and one idea: gravitational
+ * lensing. For each pixel we compute the distance d to the composer's
+ * rounded rectangle and its outward normal n, then look the star field up
+ * at a point pulled toward the composer by k / (d + c). Stars far away barely
+ * move; near the rim they are pushed outward and squeezed into a dense band
+ * of thin points. The pointer is a second, smaller lens, so the sky bends
+ * around it the same way, and it also drives parallax across four depths.
  *
- * The page drives it: where the composer is (read every frame, so the lens
- * follows the composer when it glides to its dock), whether it is focused
- * (the rim brightens), whether the agent is working (the flow speeds up),
- * and the pointer. Purely decorative: the canvas is aria-hidden. Without
- * WebGL a simpler 2D version runs; under reduced motion, one still frame.
+ * The page drives it every frame: where the composer is (so the lens follows
+ * it from the centre to its dock), focus (the rim brightens), and whether the
+ * agent is working (the sky drifts faster). Decorative only, aria-hidden. A 2D
+ * fallback runs without WebGL; reduced motion gets one still frame.
  */
 
 const VERT = `
@@ -30,90 +25,44 @@ precision highp float;
 uniform vec2 uRes;        // canvas size, px
 uniform float uDpr;
 uniform float uTime;
-uniform float uFlow;      // accumulated flow along the outline, px
 uniform vec4 uBox;        // composer centre x, y, half width, half height (px, top-left origin)
 uniform float uRadius;    // composer corner radius
-uniform float uReach;     // how far the lensed disc reaches
-uniform float uGlow;      // overall disc and rim strength
+uniform float uLens;      // lens strength, px²
+uniform float uCore;      // softening, px: smaller is a sharper lens
+uniform float uDrift;     // accumulated drift time: advances faster while the agent works
+uniform float uGlow;      // lens and rim strength: full on welcome, softer in a chat
 uniform float uFocus;     // rim boost when the composer has focus
 uniform vec3 uMouse;      // pointer x, y (px) and presence 0..1
 uniform vec3 uInk;        // star colour
 uniform vec3 uCool;       // the cooler star colour
 uniform vec3 uGround;     // page colour
 
-const float PI = 3.14159265;
-
 float hash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
 vec2 hash2(vec2 p) { float n = hash(p); return vec2(n, hash(p + n + 17.0)); }
 
 // One star per cell: brightness at point u (in px units of the cell grid).
-vec4 star(vec2 u, vec2 cell, float density, float size) {
+// \`tdir\` and \`stretch\` draw it longer along one direction: a lensed star is a short arc.
+vec4 star(vec2 u, vec2 cell, float density, float size, vec2 tdir, float stretch) {
   vec2 id = floor(u / cell);
   vec2 f = fract(u / cell) * cell;
   vec2 h = hash2(id);
   float on = step(1.0 - density, hash(id + 3.1));
   vec2 pos = (0.2 + 0.6 * h) * cell;
   float r = size * (0.45 + 0.9 * h.x * h.x);
-  float dd = length(f - pos);
-  float core = exp(-dd * dd / (r * r));
+  vec2 off = f - pos;
+  float along = dot(off, tdir) / stretch;
+  float across = dot(off, vec2(-tdir.y, tdir.x));
+  float dd = length(off);
+  float core = exp(-(along * along + across * across) / (r * r));
   float halo = exp(-dd / (r * 3.5)) * 0.22 * step(0.85, h.y); // only the brightest stars bloom
   float b = on * (0.35 + 0.65 * h.y) * (core + halo);
   float cool = step(0.72, hash(id + 9.7));
   return vec4(b, cool, h);
 }
 
-// A streak: a star smeared into a segment along x (the outline direction), bright at its head.
-// Drawn analytically, distance to a segment, so it is one smooth line rather than a row of dots.
-// \`period\` is the outline's length: cells are sized to divide it exactly and their ids wrap,
-// so the field closes seamlessly where the outline coordinate starts again.
-vec4 streak(vec2 u, float cellW, float rowH, float density, float width, float len, float period) {
-  float n = max(floor(period / cellW), 1.0);
-  cellW = period / n;
-  len = min(len, 2.6 * cellW);                       // a tail never outruns the cells we look at
-  float row = floor(u.y / rowH);
-  float total = 0.0;
-  float cool = 0.0;
-  float first = floor(u.x / cellW);
-  for (int j = 0; j < 4; j++) {
-    float cx = first + float(j);
-    vec2 id = vec2(mod(cx, n), row);
-    vec2 h = hash2(id);
-    if (hash(id + 3.1) < 1.0 - density) continue;
-    vec2 head = vec2((cx + h.x) * cellW, (row + 0.2 + 0.6 * h.y) * rowH);
-    float L = len * (0.35 + 0.65 * hash(id + 5.3));
-    float back = head.x - u.x;                      // how far behind the head this pixel is
-    float dx = back < 0.0 ? -back : max(back - L, 0.0);
-    float dy = u.y - head.y;
-    float w = width * (0.6 + 0.8 * h.x);
-    float core = exp(-(dx * dx + dy * dy) / (w * w));
-    float along = clamp(back / L, 0.0, 1.0);
-    float b = core * (1.0 - along) * (1.0 - along) * (0.4 + 0.6 * h.y);
-    total += b;
-    cool = max(cool, step(0.7, hash(id + 9.7)) * b);
-  }
-  return vec4(total, cool, 0.0, 0.0);
-}
-
 float sdRoundBox(vec2 p, vec2 b, float r) {
   vec2 q = abs(p) - b + r;
   return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
-}
-
-// Arc-length position along the rounded rectangle's outline, clockwise from its top-left.
-float outline(vec2 p, vec2 hb, float r) {
-  float a = hb.x - r, b = hb.y - r;
-  vec2 c = clamp(p, vec2(-a, -b), vec2(a, b));
-  vec2 v = p - c;
-  float th = atan(v.y, v.x);
-  float q = PI * 0.5 * r;
-  if (v.y > 0.0 && abs(v.x) < 0.001) return p.x + a;                                   // top
-  if (v.x > 0.0 && abs(v.y) < 0.001) return 2.0 * a + q + (b - p.y);                     // right
-  if (v.y < 0.0 && abs(v.x) < 0.001) return 2.0 * a + 2.0 * q + 2.0 * b + (a - p.x);     // bottom
-  if (v.x < 0.0 && abs(v.y) < 0.001) return 4.0 * a + 3.0 * q + 2.0 * b + (p.y + b);     // left
-  if (v.x >= 0.0 && v.y >= 0.0) return 2.0 * a + r * (PI * 0.5 - th);                    // top right
-  if (v.x >= 0.0) return 2.0 * a + q + 2.0 * b + r * (-th);                              // bottom right
-  if (v.y < 0.0) return 4.0 * a + 2.0 * q + 2.0 * b + r * (-PI * 0.5 - th);              // bottom left
-  return 4.0 * a + 3.0 * q + 4.0 * b + r * (PI - th);                                    // top left
 }
 
 void main() {
@@ -122,65 +71,52 @@ void main() {
   float d = sdRoundBox(rel, uBox.zw, uRadius);
   vec3 col = uGround;
 
-  // Gradient of the distance field: the outward normal.
+  // Outward normal of the composer's outline (gradient of the distance field).
   vec2 e = vec2(1.0, 0.0);
   vec2 n = normalize(vec2(sdRoundBox(rel + e.xy, uBox.zw, uRadius) - sdRoundBox(rel - e.xy, uBox.zw, uRadius),
                           sdRoundBox(rel + e.yx, uBox.zw, uRadius) - sdRoundBox(rel - e.yx, uBox.zw, uRadius)) + 1e-5);
 
-  // The pointer: parallax for the far field, and a small well that bends stars around it.
+  // Two lenses bend the same sky. Each pixel looks up the star field at a point
+  // pulled toward the mass: stars near it are pushed outward and squeezed into a
+  // dense, thin band, the way light bends around something heavy. No lines are
+  // drawn; every star is still a point, only displaced.
+  float dd = max(d, 0.0);
+  // Capped, so the corners (where the normal turns) cannot focus one star into a long ring.
+  vec2 boxLens = n * min((uLens * uGlow) / (dd + uCore), 55.0);
   vec2 toMouse = px - uMouse.xy;
-  float mDist = length(toMouse);
-  vec2 bend = normalize(toMouse + 1e-5) * (5200.0 / (mDist + 70.0)) * uMouse.z;
+  float md = length(toMouse);
+  vec2 mouseLens = normalize(toMouse + 1e-5) * (5200.0 / (md + 70.0)) * uMouse.z;
   vec2 parallax = (uMouse.xy - uRes / (2.0 * uDpr)) * uMouse.z;
+  vec2 src = px - boxLens - mouseLens;
 
-  // Far field: three depths, pulled slightly toward the composer.
-  float pull = 900.0 * uGlow / (max(d, 0.0) + 90.0);
-  vec2 far = px - n * pull - bend;
-  float field = 0.0;
+  // Each lens also stretches stars along its edge (its tangent). The stronger lens here wins.
+  float boxPull = (uLens * uGlow) / ((dd + uCore) * (dd + uCore));
+  float mousePull = 5200.0 * uMouse.z / ((md + 70.0) * (md + 70.0));
+  vec2 tBox = vec2(-n.y, n.x);
+  vec2 tMouse = normalize(vec2(-toMouse.y, toMouse.x) + 1e-5);
+  vec2 tdir = boxPull >= mousePull ? tBox : tMouse;
+  float stretch = 1.0 + min(boxPull + mousePull, 1.0) * 4.5; // a short arc, never a line
+
+  float bright = 0.0;
   vec3 tint = vec3(0.0);
-  for (int i = 0; i < 3; i++) {
+  for (int i = 0; i < 4; i++) {
     float depth = float(i) + 1.0;
-    vec2 u = far - parallax * 0.035 * depth + vec2(uTime * 2.0 * depth, uTime * 0.6);
-    vec4 s = star(u, vec2(38.0 + 30.0 * depth), 0.5, 0.7 + 0.5 * depth);
+    vec2 u = src - parallax * 0.03 * depth + vec2(2.5 * depth, 0.8 * depth) * uDrift;
+    vec4 s = star(u, vec2(30.0 + 26.0 * depth), 0.55, 0.65 + 0.4 * depth, tdir, stretch);
     float tw = 0.7 + 0.3 * sin(uTime * (0.6 + s.z * 2.0) + s.w * 6.2831);
-    float b = s.x * tw * (0.75 + 0.35 * depth);
-    field += b;
+    float b = s.x * tw * (0.7 + 0.3 * depth);
+    bright += b;
     tint += b * mix(uInk, uCool, s.y);
   }
+  // Lensing concentrates light: squeezed, stretched stars near an edge shine brighter.
+  tint *= 1.0 + min(boxPull + mousePull, 1.2) * 1.4;
 
-  // The lensed disc, in orbit coordinates.
-  vec3 disc = vec3(0.0);
-  if (d > 0.0 && uGlow > 0.01) {
-    // Wider to the sides than above and below, so the disc never runs over the head.
-    float reach = uReach * mix(0.42, 1.0, abs(n.x));
-    float t = clamp(d / reach, 0.0, 1.0);
-    float period = 4.0 * (uBox.z - uRadius) + 4.0 * (uBox.w - uRadius) + 2.0 * PI * uRadius;
-    float w = pow(1.0 - t, 2.0);                            // presence falls off with distance
-    float dw = reach * pow(t, 1.7);                          // crowd stars toward the rim
-    float s = outline(rel, uBox.zw, uRadius);
-    float speed = 0.25 + 2.6 * pow(1.0 - t, 3.0);            // faster near the edge
-    float smear = 10.0 + 90.0 * pow(1.0 - t, 2.0);           // longer streaks near the edge
-    vec2 u = vec2(s - uFlow * speed, dw);
-    vec4 a = streak(u, 46.0, 6.0, 0.5, 0.9, smear, period);
-    vec4 b = streak(u + vec2(0.0, 3.0), 64.0, 9.0, 0.4, 1.25, smear * 1.2, period);
-    disc += mix(uInk, uCool, clamp(a.y / max(a.x, 1e-3), 0.0, 1.0)) * a.x;
-    disc += mix(uInk, uCool, clamp(b.y / max(b.x, 1e-3), 0.0, 1.0)) * b.x;
-    disc *= w * 0.8 * uGlow;
-    // A few long arcs further out.
-    float arcs = 0.0;
-    arcs = streak(vec2(s - uFlow * 0.35, d * 0.9), 150.0, 26.0, 0.3, 1.1, 150.0, period).x;
-    disc += uInk * arcs * 0.5 * uGlow * smoothstep(0.05, 0.3, t) * (1.0 - smoothstep(0.6, 1.2, t));
-    // The rim and a faint halo.
-    float rim = exp(-d / 1.6) * (0.55 + 0.45 * uFocus) + exp(-d / 22.0) * 0.07;
-    disc += uInk * rim * uGlow;
-    // The disc hides the far field behind it a little: lensing darkens the sky next to the rim.
-    field *= mix(1.0, 0.35, w * uGlow);
-    tint *= mix(1.0, 0.35, w * uGlow);
-  }
-
-  col += tint + disc;
+  // A hairline of light on the rim, and a soft falloff just outside it.
+  float rim = d > 0.0 ? exp(-d / 1.4) * (0.35 + 0.4 * uFocus) * uGlow : 0.0;
+  col += tint + uInk * rim;
   gl_FragColor = vec4(col, 1.0);
 }
+
 `;
 
 /** Read a CSS colour token as linear-ish rgb 0..1 (canvas does the parsing, oklch included). */
@@ -226,8 +162,8 @@ export function startCosmos(canvas, getTarget) {
   gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
   const U = (n) => gl.getUniformLocation(program, n);
   const u = {
-    res: U('uRes'), dpr: U('uDpr'), time: U('uTime'), flow: U('uFlow'), box: U('uBox'), radius: U('uRadius'),
-    reach: U('uReach'), glow: U('uGlow'), focus: U('uFocus'), mouse: U('uMouse'), ink: U('uInk'), cool: U('uCool'), ground: U('uGround'),
+    res: U('uRes'), dpr: U('uDpr'), time: U('uTime'), box: U('uBox'), radius: U('uRadius'),
+    lens: U('uLens'), core: U('uCore'), drift: U('uDrift'), glow: U('uGlow'), focus: U('uFocus'), mouse: U('uMouse'), ink: U('uInk'), cool: U('uCool'), ground: U('uGround'),
   };
   gl.uniform3fv(u.ink, tokenRgb('--color-star', 'white'));
   gl.uniform3fv(u.cool, tokenRgb('--color-star-cool', 'lightblue'));
@@ -254,13 +190,13 @@ export function startCosmos(canvas, getTarget) {
   let raf = 0;
   let last = performance.now();
   let time = 0;
-  let flow = 0;
+  let drift = 0;
   function frame(now) {
     const dt = Math.min((now - last) / 1000, 0.05);
     last = now;
     const target = getTarget();
     time += dt;
-    flow += dt * 24 * target.energy;
+    drift += dt * target.energy; // integrated, so a change of speed never makes the sky jump
     const ease = 1 - Math.exp(-dt * 6);
     mouse.x += (mouse.tx - mouse.x) * ease;
     mouse.y += (mouse.ty - mouse.y) * ease;
@@ -270,10 +206,11 @@ export function startCosmos(canvas, getTarget) {
     gl.uniform2f(u.res, canvas.width, canvas.height);
     gl.uniform1f(u.dpr, dpr);
     gl.uniform1f(u.time, time);
-    gl.uniform1f(u.flow, flow);
     gl.uniform4f(u.box, r.left + r.width / 2, r.top + r.height / 2, r.width / 2, r.height / 2);
     gl.uniform1f(u.radius, target.radius);
-    gl.uniform1f(u.reach, target.reach);
+    gl.uniform1f(u.lens, target.lens);
+    gl.uniform1f(u.core, 26);
+    gl.uniform1f(u.drift, drift);
     gl.uniform1f(u.glow, target.glow);
     gl.uniform1f(u.focus, target.focus);
     gl.uniform3f(u.mouse, mouse.x, mouse.y, still.matches ? 0 : mouse.on);
