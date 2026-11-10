@@ -149,7 +149,13 @@ export function buildSystemPrompt({ now, tz, recall, conversation, all }: Prompt
 
   const memory: string[] = recall.hits.map((h) => renderHit(h, now, tz));
   if (recall.emptyWindows.length) {
-    memory.push(`Nothing in memory for: ${recall.emptyWindows.map(describeWindow).join('; ')}.`);
+    // Stated next to the gap itself, so even a small model acts on it.
+    memory.push(
+      `Nothing in memory for: ${recall.emptyWindows.map(describeWindow).join('; ')}. ` +
+        'Say so in one sentence. Do not search for that conversation. If the question also asks about the present ' +
+        '(prices now, what changed, what shipped), answer that part now: search the most likely candidates, say which you assumed, ' +
+        'and offer to check their exact list instead.',
+    );
   }
   // A conversation resumed on a later day: its own earlier claims are what "is this still right?" means.
   const earlierClaims = conversation.claims.filter((k) => k.asOf < dayKey(now, tz));
