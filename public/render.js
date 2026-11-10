@@ -23,12 +23,29 @@ export function el(html) {
 export function renderAnswer(target, markdown, sources) {
   const html = DOMPurify.sanitize(marked.parse(markdown ?? ''), { ADD_ATTR: ['target'] });
   target.innerHTML = html;
+  houseStyle(target);
   linkCitations(target, sources);
   enhanceTables(target);
   for (const a of target.querySelectorAll('a[href^="http"]')) {
     a.target = '_blank';
     a.rel = 'noopener noreferrer';
   }
+}
+
+/**
+ * The prompt asks for no headings or rules; models drift. Rather than trust
+ * wording, the renderer enforces the house style: a heading becomes a bold
+ * lead-in, a horizontal rule disappears.
+ */
+function houseStyle(root) {
+  for (const h of root.querySelectorAll('h1, h2, h3, h4, h5, h6')) {
+    const p = document.createElement('p');
+    const b = document.createElement('strong');
+    b.append(...h.childNodes);
+    p.append(b);
+    h.replaceWith(p);
+  }
+  for (const hr of root.querySelectorAll('hr')) hr.remove();
 }
 
 function linkCitations(root, sources) {
@@ -97,6 +114,18 @@ function enhanceTables(root) {
       [...row.cells].forEach((cell, i) => {
         if (figures[i] && figures[i] * 2 >= (filled[i] ?? 1)) cell.classList.add('col-num');
       });
+    }
+    // A recheck table (Then / Now / Status): on a changed row, strike the old value through.
+    const heads = [...table.querySelectorAll('thead th')].map((th) => th.textContent.trim().toLowerCase());
+    const then = heads.findIndex((h) => /^(then|before|was|old)\b/.test(h));
+    const now = heads.findIndex((h) => /^(now|today|current|new)\b/.test(h));
+    if (then >= 0 && now >= 0) {
+      for (const row of table.querySelectorAll('tbody tr')) {
+        if (!row.querySelector('.is-changed')) continue;
+        row.classList.add('row-changed');
+        row.cells[then]?.classList.add('was');
+        row.cells[now]?.classList.add('now');
+      }
     }
   }
 }

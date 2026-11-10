@@ -44,11 +44,13 @@ export class TavilySearch implements SearchProvider {
     const hit = this.cache.get(key);
     if (hit && Date.now() - hit.at < TTL_MS) return { hits: hit.hits, cached: true };
 
+    // Measured on this API: fast ~1.3 s, basic ~2.4 s, advanced ~3.8 s per query.
+    // 'fast' still returns several excerpts per page; 'deep' buys more of them.
     const body: Record<string, unknown> = {
       query,
-      search_depth: opts.deep ? 'advanced' : 'basic',
+      search_depth: opts.deep ? 'basic' : 'fast',
       chunks_per_source: opts.deep ? 3 : 2,
-      max_results: opts.deep ? 5 : 6,
+      max_results: 5,
       include_published_date: true,
       topic: 'general',
     };

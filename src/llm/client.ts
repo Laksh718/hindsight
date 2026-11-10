@@ -96,6 +96,7 @@ export class LlmClient {
 
     let last: LlmError | undefined;
     for (const model of order) {
+      const started = Date.now();
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${this.cfg.apiKey}` },
@@ -104,9 +105,11 @@ export class LlmClient {
       });
       if (res.ok) {
         this.lastModel = model;
+        console.log(`[llm] ${model} ${stream ? 'stream' : 'complete'} ${res.status} in ${Date.now() - started} ms`);
         return res;
       }
       last = friendlyError(res.status, await res.text(), this.cfg);
+      console.log(`[llm] ${model} ${res.status} in ${Date.now() - started} ms${last.retryable ? ', trying the next model' : ''}`);
       if (!last.retryable) throw last;
       benched.set(model, Date.now() + BENCH_MS);
     }

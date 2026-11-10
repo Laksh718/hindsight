@@ -27,8 +27,9 @@ const PRESETS: Record<string, Preset> = {
     label: 'Google Gemini',
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai/',
     keyEnv: 'GEMINI_API_KEY',
-    // Newest first; overloaded models fall through to the next (see llm/client.ts).
-    model: 'gemini-3.8-flash,gemini-3.5-flash,gemini-3.5-flash-lite',
+    // Most reliably available first; overloaded models fall through to the next (see llm/client.ts).
+    // 3.8 Flash returned 503 "high demand" on every free-tier call while this was built.
+    model: 'gemini-3.5-flash,gemini-3.8-flash,gemini-3.5-flash-lite',
     fastModel: 'gemini-3.5-flash-lite',
     reasoning: 'low', // 3.x Flash rejects 'minimal'; 'low' is accepted across the chain
   },

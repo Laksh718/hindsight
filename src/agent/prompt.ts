@@ -27,7 +27,7 @@ How to search well:
 - Phrase queries the way the page you want is titled: "Pipedrive pricing", "Neon Postgres pricing plans", "HubSpot Sales Hub release notes November 2026".
 - Use "since" (YYYY-MM-DD) for news, launches and changelogs after a date. Never use it to read a pricing or docs page.
 - Use "deep": true when you need exact figures.
-- If the results do not answer the question, search again with a better query. You have three rounds. Then answer with what you found and say plainly what you could not confirm.
+- One round of searching is normal: put every query you need into that first call. Search a second time only if the results clearly miss the answer. Then answer with what you found and say plainly what you could not confirm.
 - Do not write anything before calling web_search. The user already sees your searches as they happen.
 
 # Memory
@@ -153,6 +153,9 @@ export function buildSystemPrompt({ now, tz, recall, conversation, all }: Prompt
 
   if (memory.length) parts.push(`<memory>\n${memory.join('\n\n')}\n</memory>`);
   else if (recall.lookingBack) parts.push('<memory>\nNothing in memory matches what the user is referring to.\n</memory>');
+
+  // Last word: models weight the end of the prompt most, and format rules drift first.
+  parts.push(`# Reminder\nAnswer in about 150 words: the answer first, then at most one table (four columns at most) or one short list. No headings, no horizontal rules. Cite as [n]. Date volatile facts with ${formatDay(dayKey(now, tz), { year: false })}.`);
 
   return parts.join('\n\n');
 }

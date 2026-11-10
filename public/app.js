@@ -97,8 +97,8 @@ function paintModel() {
   const s = state.status;
   const line = $('#model-line');
   if (!s) return (line.textContent = '');
-  if (s.replay) return (line.textContent = s.recorded ? 'Recorded demo: replays real answers, no server' : 'Demo');
-  line.textContent = s.model ? `${s.model.provider}, ${s.model.model}, with ${s.search ?? 'no'} search` : 'Not configured yet';
+  if (s.replay) return (line.textContent = s.recorded ? `recorded demo, ${s.model?.model ?? ''}` : 'demo');
+  line.textContent = s.model ? `${s.model.model} with ${(s.search ?? 'no').toLowerCase()} search` : 'not configured yet';
 }
 
 /* Memory sidebar ----------------------------------------------------------- */
@@ -129,7 +129,7 @@ function paintMemory() {
           </a></li>`,
         )
         .join('');
-      return `<section class="day"><h3><time datetime="${dayKey(items[0].updatedAt)}">${formatDay(items[0].updatedAt)}</time><span>${rel}</span></h3><ul>${rows}</ul></section>`;
+      return `<section class="day"${rel === 'today' ? ' data-today' : ''}><h3><time datetime="${dayKey(items[0].updatedAt)}">${formatDay(items[0].updatedAt)}</time><span>${rel}</span></h3><ul>${rows}</ul></section>`;
     })
     .join('');
 }
@@ -174,7 +174,7 @@ async function paintWelcome() {
   const s = state.status;
   if (s && !s.ready) {
     thread().innerHTML = `<section class="welcome setup">
-      <h1>Two free keys, then ask away</h1>
+      <h1>two free keys, then ask away</h1>
       <p class="lead">Hindsight needs a model and a search engine. Both have free tiers, no card needed.</p>
       <ol>
         <li>Get a Gemini key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">aistudio.google.com/apikey</a></li>
@@ -188,7 +188,7 @@ async function paintWelcome() {
   }
   if (s?.replay && !s.recorded) {
     thread().innerHTML = `<section class="welcome setup">
-      <h1>The recorded demo is on its way</h1>
+      <h1>the recorded demo is on its way</h1>
       <p class="lead">This page replays real Hindsight answers with no server. The first session has not been recorded yet. Meanwhile, run it yourself with two free keys.</p>
       <ol>
         <li><code>git clone https://github.com/Laksh718/hindsight</code></li>
@@ -202,9 +202,16 @@ async function paintWelcome() {
   }
   const list = await starters();
   thread().innerHTML = `<section class="welcome">
-    <h1>What should I look up?</h1>
-    <p class="lead">I search the web and cite every source. I also keep a dated record of what I told you, so you can ask later whether it still holds.</p>
-    <ul class="starters">${list.map(([label, q]) => `<li><button class="starter" type="button" data-ask="${esc(q)}" title="${esc(q)}">${esc(label)}</button></li>`).join('')}</ul>
+    <h1>it <span class="verb">remembers</span> what it told you</h1>
+    <p class="lead">Ask anything current. Every answer is searched, cited and dated, so later you can ask whether it still holds.</p>
+    <div class="path" role="img" aria-label="How a question is answered: recall memory by date, search the web in parallel, answer with citations, record the claims with today's date.">
+      <div class="path__node"><b>recall</b><span>"last Tuesday" becomes 3 Nov; that day's answers come back</span></div>
+      <div class="path__node"><b>web_search</b><span>up to five queries at once</span></div>
+      <div class="path__node"><b>answer</b><span>streamed, every fact cited</span></div>
+      <div class="path__node" data-key><b>ledger</b><span>claims saved with today's date</span></div>
+      <div class="path__node"><b>later</b><span>"still true?" rechecks each claim</span></div>
+    </div>
+    <ul class="starters">${list.map(([label, q]) => `<li><button class="starter" type="button" data-ask="${esc(q)}" title="${esc(q)}">${esc(label.toLowerCase())}</button></li>`).join('')}</ul>
   </section>`;
   setComposer({ disabled: false });
 }
@@ -212,6 +219,12 @@ async function paintWelcome() {
 function turnShell(user) {
   return el(`<article class="turn">
     <header class="turn__q"><time class="turn__time" datetime="${esc(user.at)}" title="${esc(formatDay(user.at))}">${formatTime(user.at)}</time><h2 class="turn__ask">${esc(user.content)}</h2></header>
+    <ol class="pipe" aria-label="What the agent did">
+      <li data-step="recall"><span class="pipe__name">recall</span><span class="pipe__meta"></span></li>
+      <li data-step="search"><span class="pipe__name">search</span><span class="pipe__meta"></span></li>
+      <li data-step="answer"><span class="pipe__name">answer</span><span class="pipe__meta"></span></li>
+      <li data-step="remember"><span class="pipe__name">remember</span><span class="pipe__meta"></span></li>
+    </ol>
     <ol class="trail"></ol>
     <div class="prose answer"></div>
     <div class="turn__foot"></div>
@@ -224,6 +237,18 @@ function trailItem(turn, verb, whatHtml, meta = '', stateName = '') {
   return li;
 }
 
+/** Light one step of the pipeline: idle, active, done, skipped or failed, with a mono readout. */
+function step(turn, name, stateName, meta) {
+  const li = turn.querySelector(`.pipe [data-step="${name}"]`);
+  if (!li) return;
+  li.dataset.state = stateName;
+  if (meta !== undefined) {
+    const m = li.querySelector('.pipe__meta');
+    m.textContent = meta;
+    m.title = meta;
+  }
+}
+
 const queriesHtml = (queries, since) => `${queries.map((q) => `<q>${esc(q)}</q>`).join(', ')}${since ? `, published since ${esc(since)}` : ''}`;
 
 function paintFoot(turn, message, claims) {
@@ -234,12 +259,12 @@ function paintFoot(turn, message, claims) {
     const cited = citedNumbers(message.content);
     const citedCount = sources.filter((s) => cited.has(s.n)).length;
     foot.append(
-      el(`<details class="fold sources"><summary>Sources<span class="fold__meta">${citedCount} cited, ${sources.length} read</span></summary><div class="fold__body">${sourcesTable(sources, cited)}</div></details>`),
+      el(`<details class="fold sources"><summary>sources<span class="fold__meta">${citedCount} cited, ${sources.length} read</span></summary><div class="fold__body">${sourcesTable(sources, cited)}</div></details>`),
     );
   }
   if (claims?.length) {
     foot.append(
-      el(`<details class="fold ledger" open><summary>Remembered<span class="fold__meta">${claims.length} ${claims.length === 1 ? 'claim' : 'claims'}, as of ${esc(formatDay(claims[0].asOf + 'T12:00:00'))}</span></summary>
+      el(`<details class="fold ledger" open><summary>remembered<span class="fold__meta">${claims.length} ${claims.length === 1 ? 'claim' : 'claims'}, as of ${esc(formatDay(claims[0].asOf + 'T12:00:00'))}</span></summary>
         <div class="fold__body"><p class="ledger__note">Ask later whether these still hold, and I will check each one again.</p>${ledgerTable(claims, domainOf)}</div></details>`),
     );
   }
@@ -248,6 +273,15 @@ function paintFoot(turn, message, claims) {
 function paintStoredTurn(user, answer, conversation) {
   const turn = turnShell(user);
   if (answer) {
+    const recalled = answer.recalled ?? [];
+    const searches = answer.searches ?? [];
+    const queries = searches.reduce((n, x) => n + x.queries.length, 0);
+    const pages = searches.reduce((n, x) => n + x.results, 0);
+    const claims = conversation.claims.filter((k) => k.messageId === answer.id);
+    step(turn, 'recall', recalled.length ? 'done' : 'skipped', recalled.length ? `${recalled.length} past` : 'nothing needed');
+    step(turn, 'search', searches.length ? 'done' : 'skipped', searches.length ? `${queries} queries, ${pages} pages` : 'not needed');
+    step(turn, 'answer', 'done', answer.ms ? seconds(answer.ms) : '');
+    step(turn, 'remember', claims.length ? 'done' : 'skipped', claims.length ? `${claims.length} claims` : 'nothing to keep');
     const titles = new Map(state.conversations.map((c) => [c.id, c.title]));
     for (const id of answer.recalled ?? []) {
       trailItem(turn, 'Recalled', `<a href="#/c/${esc(id)}">${esc(titles.get(id) || 'a past conversation')}</a>`);
@@ -255,9 +289,8 @@ function paintStoredTurn(user, answer, conversation) {
     for (const s of answer.searches ?? []) {
       trailItem(turn, 'Searched', queriesHtml(s.queries, s.since), s.cached ? 'cached' : `${s.results} pages, ${seconds(s.ms)}`);
     }
-    if (answer.ms) trailItem(turn, 'Answered', `${formatDay(answer.at)}, ${formatTime(answer.at)}`, seconds(answer.ms));
     renderAnswer(turn.querySelector('.answer'), answer.content, new Map((answer.sources ?? []).map((s) => [s.n, s])));
-    paintFoot(turn, answer, conversation.claims.filter((k) => k.messageId === answer.id));
+    paintFoot(turn, answer, claims);
   }
   return turn;
 }
@@ -303,7 +336,7 @@ async function route() {
     paintConversation(c);
     window.scrollTo({ top: document.body.scrollHeight });
   } catch {
-    thread().innerHTML = `<div class="failure"><p>Could not load that conversation. Is the server still running?</p><button class="btn" type="button" data-action="reload">Try again</button></div>`;
+    thread().innerHTML = `<div class="failure"><p>Could not load that conversation. Is the server still running?</p><button class="pill" type="button" data-action="reload">Try again</button></div>`;
   }
 }
 
@@ -313,9 +346,8 @@ function setComposer({ disabled = false, busy = false } = {}) {
   const send = $('#send');
   ask.disabled = disabled;
   send.disabled = disabled;
-  send.textContent = busy ? 'Stop' : 'Ask';
-  send.classList.toggle('btn--primary', !busy);
-  send.classList.toggle('btn--quiet', busy);
+  send.textContent = busy ? 'stop' : 'ask';
+  send.classList.toggle('pill--primary', !busy);
   send.setAttribute('aria-busy', String(busy));
 }
 
@@ -349,7 +381,10 @@ async function ask(text) {
   };
 
   answerEl.setAttribute('aria-busy', 'true');
-  const working = trailItem(turn, 'Reading', 'memory and the question', '', 'working');
+  step(turn, 'recall', 'active', 'reading memory');
+  let queryCount = 0;
+  let pageCount = 0;
+  const searchStarted = Date.now();
   const ac = new AbortController();
   state.abort = ac;
 
@@ -366,7 +401,8 @@ async function ask(text) {
           break;
         }
         case 'recall': {
-          working.remove();
+          step(turn, 'recall', ev.hits.length ? 'done' : 'skipped', ev.hits.length ? `${ev.hits.length} past` : ev.windows.length ? 'nothing that day' : 'nothing needed');
+          step(turn, 'answer', 'active', 'thinking');
           for (const w of ev.windows) {
             trailItem(turn, w.alternative ? 'Or' : 'Dated', `<q>${esc(w.phrase)}</q> as ${esc(w.label)}`);
           }
@@ -378,11 +414,17 @@ async function ask(text) {
           break;
         }
         case 'search': {
+          queryCount += ev.queries.length;
+          step(turn, 'search', 'active', `${queryCount} ${queryCount === 1 ? 'query' : 'queries'}`);
+          step(turn, 'answer', '', '');
           searchRows.set(ev.id, trailItem(turn, 'Searching', queriesHtml(ev.queries, ev.since), '', 'working'));
           break;
         }
         case 'results': {
           for (const s of ev.sources) sources.set(s.n, s);
+          pageCount = sources.size;
+          step(turn, 'search', ev.error ? 'failed' : 'done', ev.error ? 'failed' : `${queryCount} queries, ${pageCount} pages, ${seconds(Date.now() - searchStarted)}`);
+          step(turn, 'answer', 'active', 'writing');
           const row = searchRows.get(ev.id);
           if (row) {
             row.removeAttribute('data-state');
@@ -404,7 +446,8 @@ async function ask(text) {
           break;
         }
         case 'text': {
-          working.remove();
+          if (turn.querySelector('.pipe [data-step="search"]').dataset.state === undefined) step(turn, 'search', 'skipped', 'not needed');
+          step(turn, 'answer', 'active', 'writing');
           draft += ev.text;
           schedule();
           break;
@@ -415,7 +458,8 @@ async function ask(text) {
           for (const s of ev.message.sources ?? []) sources.set(s.n, s);
           renderAnswer(answerEl, draft, sources);
           answerEl.removeAttribute('aria-busy');
-          trailItem(turn, 'Answered', '', seconds(ev.message.ms ?? 0));
+          step(turn, 'answer', 'done', seconds(ev.message.ms ?? 0));
+          step(turn, 'remember', 'active', 'reading the answer');
           paintFoot(turn, ev.message, []);
           turn.dataset.messageId = ev.message.id;
           $('#announcer').textContent = 'Answer ready.';
@@ -426,14 +470,15 @@ async function ask(text) {
         case 'remembered': {
           const done = { content: draft, sources: [...sources.values()] };
           if (ev.claims?.length) paintFoot(turn, done, ev.claims);
+          step(turn, 'remember', ev.claims?.length ? 'done' : 'skipped', ev.claims?.length ? `${ev.claims.length} claims` : 'nothing to keep');
           await refreshMemory();
           break;
         }
         case 'error': {
-          working.remove();
+          for (const li of turn.querySelectorAll('.pipe [data-state="active"]')) step(turn, li.dataset.step, 'failed', 'failed');
           answerEl.removeAttribute('aria-busy');
           turn.querySelector('.turn__foot').replaceChildren(
-            el(`<div class="failure"><p>${esc(ev.message)}</p><button class="btn" type="button" data-retry="${esc(text)}">Try again</button></div>`),
+            el(`<div class="failure"><p>${esc(ev.message)}</p><button class="pill" type="button" data-retry="${esc(text)}">Try again</button></div>`),
           );
           break;
         }
@@ -442,12 +487,14 @@ async function ask(text) {
   } catch (err) {
     if (!ac.signal.aborted) {
       turn.querySelector('.turn__foot').replaceChildren(
-        el(`<div class="failure"><p>The connection to the server dropped. Your question was saved.</p><button class="btn" type="button" data-retry="${esc(text)}">Try again</button></div>`),
+        el(`<div class="failure"><p>The connection to the server dropped. Your question was saved.</p><button class="pill" type="button" data-retry="${esc(text)}">Try again</button></div>`),
       );
     }
   } finally {
-    working.remove();
     answerEl.removeAttribute('aria-busy');
+    // A stream that ended without 'remembered' (no claims to keep, or stopped) settles the last step.
+    const remember = turn.querySelector('.pipe [data-step="remember"]');
+    if (remember.dataset.state === 'active') step(turn, 'remember', 'skipped', 'nothing to keep');
     state.busy = false;
     state.abort = null;
     setComposer();

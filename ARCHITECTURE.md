@@ -97,14 +97,15 @@ Temporal features are otherwise untestable in a weekend. You cannot wait until M
 
 ## The UI
 
-Designed with the Hallmark skill, Almanac theme. The conversation is printed on a pale sheet over slate. Interface text is Hanken Grotesk, answers are Newsreader, and figures are Plex Mono. Magenta is the one signal colour, used for the primary action, citation links and the word "Changed" in recheck tables. Each answer shows:
+Designed with the Hallmark skill, Lumen theme: a violet-black ground, Instrument Serif headings in lowercase, Geist for text, Geist Mono for measured values, one brass signal and one rose verb. Each answer shows:
 
-- **the trail:** dates read, conversations recalled, searches run with page counts and timings, total time;
-- **the answer:** markdown, sanitised with DOMPurify because search results are untrusted text. Citations become links, and figure columns align right in mono;
+- **the pipeline:** recall, search, answer, remember. Each step lights brass when its event arrives and settles with its real readout ("4 queries, 19 pages, 3.1 s"). It is the agent's event stream drawn as it happens, not an animation;
+- **the trail:** specifics under the pipeline: which dates were read, which past conversations were recalled, the exact queries;
+- **the answer:** markdown, sanitised with DOMPurify because search results are untrusted text. Citations become numbered chips, figure columns align right in mono, and the renderer enforces the house style (no headings, no rules) instead of trusting the model to follow it. In a recheck table, a changed row strikes the old value through;
 - **sources:** cited first, then the rest that were read;
 - **remembered:** the claims ledger for that answer.
 
-States covered: setup (missing keys), loading (skeletons), empty (welcome and starters), error (inline, with retry), streaming, and full.
+Memory is a spine of days in the sidebar (a drawer on phones). States covered: setup (missing keys), loading (skeletons), empty (welcome, with the real pipeline drawn on a blueprint grid), error (inline, with retry), streaming, full, and replay.
 
 ## Testing
 

@@ -23,7 +23,7 @@ import { buildSystemPrompt, historyMessages, userTurn } from './prompt.ts';
 import { WEB_SEARCH, SourceBook, parseSearchArgs, runWebSearch } from './web-search-tool.ts';
 import { fallbackTitle, writeLedger } from './ledger.ts';
 
-const MAX_SEARCH_ROUNDS = 3;
+const MAX_SEARCH_ROUNDS = 2; // a second round only when the first clearly missed: each round is a model trip plus a search
 
 export type AgentEvent =
   | { type: 'start'; conversationId: string; title: string; user: Message }
