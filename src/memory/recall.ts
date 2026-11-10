@@ -14,11 +14,11 @@
  *   2. Look-back cues. "you said", "I asked", "still correct", "since then"
  *      mean the user is pointing at a past exchange, so the best topic
  *      matches come along even with no date.
- *   3. Topic. A new question about something discussed before (two or more
- *      shared terms) pulls in that conversation, so the agent can say what
- *      changed since it last answered.
+ *   3. Topic (BM25, see lexical.ts). A new question about something discussed
+ *      before (two or more shared terms) pulls in that conversation, so the
+ *      agent can say what changed since it last answered.
  */
-import MiniSearch from 'minisearch';
+import { LexicalIndex } from './lexical.ts';
 import type { Conversation } from '../types.ts';
 import type { MemoryStore } from './store.ts';
 import { dayKey, daysBetween, resolveDates, type DayKey, type DayWindow } from '../time.ts';
@@ -82,39 +82,30 @@ function inWindow(day: DayKey, w: DayWindow): boolean {
 }
 
 export class Recaller {
-  private index: MiniSearch | null = null;
+  private index: LexicalIndex | null = null;
   private indexedRevision = -1;
 
   constructor(private readonly store: MemoryStore) {}
 
   private search(text: string): Map<string, { score: number; terms: number }> {
     if (!this.index || this.indexedRevision !== this.store.revision) {
-      this.index = new MiniSearch({
-        fields: ['title', 'summary', 'asked', 'subjects'],
-        processTerm: (t) => {
-          const term = t.toLowerCase();
-          return term.length < 2 || STOPWORDS.has(term) ? null : term;
-        },
-      });
-      this.index.addAll(
+      this.index = new LexicalIndex(
         this.store.all().map((c) => ({
           id: c.id,
-          title: c.title,
-          summary: c.summary,
-          asked: c.messages.filter((m) => m.role === 'user').map((m) => m.content).join('\n'),
-          subjects: c.claims.map((k) => `${k.subject} ${k.attribute}`).join('\n'),
+          fields: {
+            title: c.title,
+            summary: c.summary,
+            asked: c.messages.filter((m) => m.role === 'user').map((m) => m.content).join('\n'),
+            subjects: c.claims.map((k) => `${k.subject} ${k.attribute}`).join('\n'),
+          },
         })),
+        { title: 3, subjects: 2, summary: 1.5, asked: 1 },
+        STOPWORDS,
       );
       this.indexedRevision = this.store.revision;
     }
     const out = new Map<string, { score: number; terms: number }>();
-    for (const r of this.index.search(text, {
-      prefix: (term) => term.length > 3,
-      fuzzy: (term) => (term.length > 5 ? 0.2 : false),
-      boost: { title: 3, subjects: 2, summary: 1.5, asked: 1 },
-    })) {
-      out.set(r.id as string, { score: r.score, terms: new Set(r.queryTerms).size });
-    }
+    for (const hit of this.index.search(text)) out.set(hit.id, { score: hit.score, terms: hit.matched });
     return out;
   }
 
