@@ -79,15 +79,20 @@ export class ReplayApi {
 
   async load() {
     if (!this.data) {
-      const r = await fetch(`${this.base}/session.json`);
-      this.data = await r.json();
+      try {
+        const r = await fetch(`${this.base}/session.json`);
+        if (!r.ok) throw new Error(String(r.status));
+        this.data = await r.json();
+      } catch {
+        this.data = { missing: true, model: null, conversations: [], replays: [] };
+      }
     }
     return this.data;
   }
 
   async status() {
     const d = await this.load();
-    return { ready: true, replay: true, problems: [], model: d.model, search: 'Tavily', conversations: d.conversations.length };
+    return { ready: true, replay: true, recorded: !d.missing, problems: [], model: d.model, search: 'Tavily', conversations: d.conversations.length };
   }
 
   async conversations() {

@@ -22,9 +22,9 @@ public/                     the UI: plain HTML, CSS and ES modules, no build ste
   app.js  api.js  render.js  styles/
 scripts/
   seed.ts                   time-travelled real conversations; records the Pages demo
-  build-pages.ts            copies the UI into docs/app in replay mode
+  build-pages.ts            copies the UI into docs/ in replay mode
 test/                       node:test, run with `npm test`
-docs/                       GitHub Pages: showcase page, replay app, recorded session
+docs/                       GitHub Pages: the UI in replay mode, plus the recorded session
 ```
 
 ## A turn, step by step

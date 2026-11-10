@@ -48,7 +48,7 @@ You can also move the clock yourself: click the date in the top bar.
 | `npm run typecheck` | TypeScript, strict |
 | `npm run seed` | time-travelled real conversations into `./data` |
 | `npm run seed -- --record docs/demo` | record a demo session for GitHub Pages |
-| `npm run pages` | copy the UI into `docs/app` in replay mode |
+| `npm run pages` | copy the UI into `docs/` in replay mode |
 
 ## How it works
 

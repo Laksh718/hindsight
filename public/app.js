@@ -96,7 +96,7 @@ function paintModel() {
   const s = state.status;
   const line = $('#model-line');
   if (!s) return (line.textContent = '');
-  if (s.replay) return (line.textContent = 'Recorded demo: replays real answers, no server');
+  if (s.replay) return (line.textContent = s.recorded ? 'Recorded demo: replays real answers, no server' : 'Demo');
   line.textContent = s.model ? `${s.model.provider}, ${s.model.model}, with ${s.search ?? 'no'} search` : 'Not configured yet';
 }
 
@@ -181,6 +181,20 @@ async function paintWelcome() {
         <li>Run <code>cp .env.example .env</code>, paste both keys in, and restart <code>npm run dev</code></li>
       </ol>
       ${s.problems.map((p) => `<p class="setup__problem">${esc(p)}</p>`).join('')}
+    </section>`;
+    setComposer({ disabled: true });
+    return;
+  }
+  if (s?.replay && !s.recorded) {
+    thread().innerHTML = `<section class="welcome setup">
+      <h1>The recorded demo is on its way</h1>
+      <p class="lead">This page replays real Hindsight answers with no server. The first session has not been recorded yet. Meanwhile, run it yourself with two free keys.</p>
+      <ol>
+        <li><code>git clone https://github.com/Laksh718/hindsight</code></li>
+        <li><code>npm install</code>, then <code>cp .env.example .env</code> and add a Gemini and a Tavily key</li>
+        <li><code>npm run dev</code> and open <code>localhost:3000</code></li>
+      </ol>
+      <p>How it works: <a href="https://github.com/Laksh718/hindsight/blob/main/DESIGN.md">DESIGN.md</a></p>
     </section>`;
     setComposer({ disabled: true });
     return;

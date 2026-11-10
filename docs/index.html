@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en" data-replay="demo">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hindsight</title>
+  <meta name="description" content="A chat agent that searches the web, cites its sources, and remembers what it told you and when.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script>document.documentElement.classList.add('js')</script>
+  <link rel="stylesheet" href="styles/app.css">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+</head>
+<body>
+  <a class="skip" href="#ask">Skip to the question box</a>
+
+  <header class="bar">
+    <button class="bar__menu btn btn--quiet" type="button" aria-controls="memory" aria-expanded="false" data-action="toggle-memory">Memory</button>
+    <a class="wordmark" href="#/" aria-label="Hindsight, new conversation">Hindsight</a>
+    <p class="bar__model" id="model-line"></p>
+    <button class="clock" type="button" popovertarget="clock-panel" id="clock-button" aria-describedby="clock-hint">
+      <span class="clock__label" id="clock-label">Today</span>
+    </button>
+    <span class="visually-hidden" id="clock-hint">Change the date the agent believes it is</span>
+    <a class="btn btn--quiet" href="#/" data-action="new">New</a>
+  </header>
+
+  <div class="clock-panel" id="clock-panel" popover>
+    <form class="clock-panel__form" id="clock-form">
+      <h2 class="clock-panel__head">Time travel</h2>
+      <p class="clock-panel__note">Move the clock to test memory: talk “on Monday”, then come back and ask what changed. Web search always sees today.</p>
+      <label for="clock-input">Pretend it is</label>
+      <input id="clock-input" name="at" type="datetime-local" required>
+      <div class="clock-panel__actions">
+        <button class="btn btn--primary" type="submit">Set the clock</button>
+        <button class="btn btn--quiet" type="button" data-action="clock-reset">Back to now</button>
+      </div>
+    </form>
+  </div>
+
+  <div class="layout">
+    <nav class="memory" id="memory" aria-label="Past conversations">
+      <div class="memory__head">
+        <h2>Memory</h2>
+        <p class="memory__count num" id="memory-count"></p>
+      </div>
+      <div id="memory-list" class="memory__list" aria-busy="true">
+        <div class="skeleton" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+      </div>
+    </nav>
+
+    <main class="main" id="main">
+      <div class="sheet">
+        <section class="thread" id="thread" aria-live="off"></section>
+
+        <form class="composer" id="composer">
+          <label class="visually-hidden" for="ask">Your question</label>
+          <textarea id="ask" name="message" rows="1" placeholder="Ask about anything current, or about something we discussed" autocomplete="off" enterkeyhint="send"></textarea>
+          <button class="btn btn--primary" type="submit" id="send">Ask</button>
+        </form>
+        <p class="composer__hint">Enter sends. Shift and Enter starts a new line.</p>
+        <p class="visually-hidden" role="status" id="announcer"></p>
+      </div>
+    </main>
+  </div>
+
+  <noscript><p class="noscript">Hindsight needs JavaScript to talk to its server.</p></noscript>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
