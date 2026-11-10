@@ -10,6 +10,9 @@ import app, { memoryMode } from './app.ts';
 import { config, setupProblems } from './config.ts';
 
 const publicDir = fileURLToPath(new URL('../public', import.meta.url));
+// The same clean URLs as vercel.json: /chat, /how, and /home back to /.
+app.get('/home', (c) => c.redirect('/', 301));
+for (const page of ['chat', 'how']) app.get(`/${page}`, serveStatic({ path: path.relative(process.cwd(), path.join(publicDir, `${page}.html`)) }));
 app.use('/*', serveStatic({ root: path.relative(process.cwd(), publicDir) || '.' }));
 
 serve({ fetch: app.fetch, port: config.port }, (info) => {

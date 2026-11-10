@@ -24,10 +24,8 @@ src/
 public/                     the UI: plain HTML, CSS and ES modules, no build step
   app.js  api.js  render.js  styles/
 scripts/
-  seed.ts                   time-travelled real conversations; records the Pages demo
-  build-pages.ts            copies the UI into docs/ in replay mode
+  seed.ts                   time-travelled real conversations; records the replayed session
 test/                       node:test, run with `npm test`
-docs/                       GitHub Pages: the UI in replay mode, plus the recorded session
 ```
 
 ## A turn, step by step
@@ -85,10 +83,10 @@ It returns clean excerpts and publish dates in one call, supports a date filter,
 One user has at most a few thousand messages, and `npm install` must work everywhere, with no native builds. The store keeps memory in process and saves the whole snapshot through a `Persistence`. Locally that is `data/memory.json` (atomic writes). On Vercel, where functions have no disk, it is one Upstash Redis key per visitor, over REST: no driver, no connection pool. Postgres would be a third `Persistence`.
 
 ### How does it run on Vercel?
-`src/app.ts` exports the Hono app and does not listen. Vercel detects it and turns it into a streaming function, and serves `public/` from its CDN. `src/dev.ts` is the local runner: the same app plus `serveStatic`. Keys are Vercel environment variables and never reach the browser. The browser sends an anonymous id (`x-hindsight-user`) so each visitor gets their own memory. The GitHub Pages copy of the UI can call the Vercel API (CORS is on for `/api/*`).
+`src/app.ts` exports the Hono app and does not listen. Vercel detects it and turns it into a streaming function, and serves `public/` from its CDN. `src/dev.ts` is the local runner: the same app plus `serveStatic`. Keys are Vercel environment variables and never reach the browser. The browser sends an anonymous id (`x-hindsight-user`) so each visitor gets their own memory.
 
 ### Why NDJSON and not SSE or WebSockets?
-The request is a POST, and `EventSource` only does GET. NDJSON over `fetch` is about 15 lines to parse. A recorded stream is a file, and the GitHub Pages demo replays exactly that file through the same UI code (`ReplayApi` in `public/api.js`).
+The request is a POST, and `EventSource` only does GET. NDJSON over `fetch` is about 15 lines to parse. A recorded stream is a file, and the landing and `/how` pages replay exactly that file.
 
 ### Why does old citation text get rewritten?
 Each answer numbers its sources from [1]. If an old answer's "[3]" appeared in the prompt next to a new search result "[3]", the model could cite the wrong thing. Old answers are therefore shown with domains instead: "(neon.tech)".
@@ -98,7 +96,7 @@ Temporal features are otherwise untestable in a weekend. You cannot wait until M
 
 ## The UI
 
-Three pages, plain HTML, CSS and ES modules, no build step: `index.html` (landing), `chat.html` (the agent) and `how.html` (a recorded turn replayed through a diagram of the parts). Designed with the Hallmark skill in a custom direction: black, Geist, one coral signal.
+Three pages, plain HTML, CSS and ES modules, no build step: `/` (landing), `/chat` (the agent) and `/how` (a recorded turn replayed through a diagram of the parts), clean URLs via `vercel.json`. Designed with the Hallmark skill in a custom direction: black, Geist, one coral signal.
 
 The backdrop (`public/cosmos.js`) is one WebGL shader: a black hole. The star field falls toward the mass (the composer, or the landing page's logo) in two cross-fading zoom layers, so stars spiral inward, shrink and fade at the horizon; a gentle lens bends them around the mass and around the pointer. It is still until you move or scroll, eases to a stop, and drifts while the agent is thinking. Rendered at 1x, paused when hidden or behind the memory map, a 2D fallback without WebGL, one still frame under reduced motion.
 

@@ -133,12 +133,9 @@ app.post('/api/chat', async (c) => {
   });
 });
 
-// On Vercel the CDN serves public/; if a request for the page reaches the function instead,
-// send it to the static file rather than a bare 404.
-app.get('/', (c) => c.redirect('/index.html'));
 app.get('/api/health', (c) => c.json({ ok: true, app: 'hindsight', time: new Date().toISOString() }));
 app.notFound((c) =>
-  c.json({ error: `Hindsight has no route for ${c.req.method} ${c.req.path}.`, hint: 'The UI is at /index.html; the API is under /api.' }, 404),
+  c.json({ error: `Hindsight has no route for ${c.req.method} ${c.req.path}.`, hint: 'Pages are /, /chat and /how; the API is under /api.' }, 404),
 );
 
 export default app;

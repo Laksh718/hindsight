@@ -12,8 +12,7 @@
     "start": "tsx src/dev.ts",
     "test": "tsx --test test/*.test.ts",
     "typecheck": "tsc --noEmit",
-    "seed": "tsx scripts/seed.ts",
-    "pages": "tsx scripts/build-pages.ts"
+    "seed": "tsx scripts/seed.ts"
   },
   "repository": {
     "type": "git",

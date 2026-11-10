@@ -344,7 +344,7 @@ a:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; bo
   .bar .ghost { padding: 0 var(--space-xs); }
   .label-long { display: none; }
   .label-short { display: inline; }
-  .bar a.ghost[href="how.html"], .bar .ghost--credit { display: none; }
+  .bar a.ghost[href="/how"], .bar .ghost--credit { display: none; }
   .main { padding: 0 var(--space-md); }
   [data-view="welcome"] .hero { padding-bottom: var(--space-lg); }
   .composer textarea { font-size: var(--text-md); }

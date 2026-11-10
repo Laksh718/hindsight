@@ -6,7 +6,7 @@ A chat agent with one tool, web search, and a dated memory. It cites what it fin
 >
 > Hindsight reads "last Tuesday" as Tue 3 Nov, recalls that conversation and the prices it recorded, searches each one again in parallel, and answers with a Then / Now table.
 
-**Live demo (recorded, no server):** https://laksh718.github.io/hindsight/ (landing page, the agent at `chat.html`, a replay of a real turn through the architecture at `how.html`)
+**Live:** https://hindsight-laksh.vercel.app (the agent at `/chat`, a real turn replayed through the architecture at `/how`)
 
 Built by [Laksh](https://laksh.codes).
 
@@ -48,7 +48,6 @@ You can also move the clock yourself: click the date in the top bar.
 3. Storage tab, add **Upstash Redis** (free) and connect it. This gives each visitor a persistent memory. Without it, memory lasts only while a function instance is warm.
 4. Deploy. Keys stay on the server, and the browser never sees them.
 
-To point the GitHub Pages copy at it: `HINDSIGHT_API=https://<your-app>.vercel.app npm run pages`, then commit `docs/`.
 
 ## Scripts
 
@@ -58,8 +57,7 @@ To point the GitHub Pages copy at it: `HINDSIGHT_API=https://<your-app>.vercel.a
 | `npm test` | 19 tests: dates, recall, the stream parser, a full scripted turn |
 | `npm run typecheck` | TypeScript, strict |
 | `npm run seed` | time-travelled real conversations into `./data` |
-| `npm run seed -- --record public/demo` | record a demo session for GitHub Pages |
-| `npm run pages` | copy the UI into `docs/` in replay mode |
+| `npm run seed -- --record public/demo` | record the session replayed on `/` and `/how` |
 
 ## How it works
 

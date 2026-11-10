@@ -12,7 +12,7 @@ message ─ save ─ recall (code, ~1 ms) ─ model ⇄ web_search (parallel que
 2. **Recall runs before the model, in code.** Named dates first, then look-back cues ("still correct", "since then"), then topic (a 60-line BM25 index). The prompt gets an index of past conversations, the full text and claims of the matched ones, and, when a day is empty, the instruction right beside the gap: say so, don't search for it, answer the present part with likely candidates.
 3. **One tool, many queries.** `web_search` runs up to five queries in parallel, with a `since` filter for news. Citations are numbered once per turn; any `[n]` that doesn't match a page read this turn is removed before saving.
 4. **The claim ledger.** After the answer streams, a cheap call extracts checkable claims (subject, value, source, date). "Is that still true?" becomes "re-verify these claims", answered as Then / Now / Status. **Recheck** does that in one tap from any answer or past conversation.
-5. **Everything is an event.** The server streams NDJSON (recall, search, results, text, done, remembered). The UI draws the pipeline from them; a recorded stream replays the real UI on GitHub Pages and on the architecture page.
+5. **Everything is an event.** The server streams NDJSON (recall, search, results, text, done, remembered). The UI draws the pipeline from them; a recorded stream replays real turns on the landing and architecture pages.
 
 ## Why this way
 

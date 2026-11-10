@@ -1,4 +1,9 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "hono"
+  "framework": "hono",
+  "cleanUrls": true,
+  "redirects": [
+    { "source": "/home", "destination": "/", "permanent": true },
+    { "source": "/index", "destination": "/", "permanent": true }
+  ]
 }
