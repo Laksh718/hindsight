@@ -27,8 +27,10 @@ const PRESETS: Record<string, Preset> = {
     label: 'Google Gemini',
     baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai/',
     keyEnv: 'GEMINI_API_KEY',
-    model: 'gemini-3.8-flash',
-    reasoning: 'minimal',
+    // Newest first; overloaded models fall through to the next (see llm/client.ts).
+    model: 'gemini-3.8-flash,gemini-3.5-flash,gemini-3.5-flash-lite',
+    fastModel: 'gemini-3.5-flash-lite',
+    reasoning: 'low', // 3.x Flash rejects 'minimal'; 'low' is accepted across the chain
   },
   groq: {
     label: 'Groq',
@@ -55,7 +57,7 @@ const PRESETS: Record<string, Preset> = {
     label: 'OpenRouter',
     baseUrl: 'https://openrouter.ai/api/v1/',
     keyEnv: 'OPENROUTER_API_KEY',
-    model: 'google/gemini-3.8-flash',
+    model: 'google/gemini-3.8-flash,google/gemini-3.5-flash',
   },
 };
 
@@ -65,9 +67,13 @@ export interface LlmConfig {
   baseUrl: string;
   apiKey: string;
   model: string;
+  /** Tried in order when the model is overloaded or rate limited. */
+  fallbacks: string[];
   fastModel: string;
   reasoning?: Reasoning;
 }
+
+const list = (v: string) => v.split(',').map((s) => s.trim()).filter(Boolean);
 
 function env(name: string): string | undefined {
   const v = process.env[name]?.trim();
@@ -79,15 +85,16 @@ function resolveLlm(): LlmConfig | null {
 
   if (requested === 'custom' || (!requested && env('LLM_BASE_URL'))) {
     const baseUrl = env('LLM_BASE_URL');
-    const model = env('LLM_MODEL');
-    if (!baseUrl || !model) return null;
+    const models = list(env('LLM_MODEL') ?? '');
+    if (!baseUrl || !models.length) return null;
     return {
       provider: 'custom',
       label: new URL(baseUrl).host,
       baseUrl,
       apiKey: env('LLM_API_KEY') ?? 'none',
-      model,
-      fastModel: env('LLM_FAST_MODEL') ?? model,
+      model: models[0]!,
+      fallbacks: models.slice(1),
+      fastModel: env('LLM_FAST_MODEL') ?? models[0]!,
       reasoning: env('LLM_REASONING') as Reasoning | undefined,
     };
   }
@@ -97,15 +104,16 @@ function resolveLlm(): LlmConfig | null {
   const apiKey = preset && (env(preset.keyEnv) ?? env('LLM_API_KEY'));
   if (!name || !preset || !apiKey) return null;
 
-  const model = env('LLM_MODEL') ?? preset.model;
+  const models = list(env('LLM_MODEL') ?? preset.model);
   const reasoning = env('LLM_REASONING');
   return {
     provider: name,
     label: preset.label,
     baseUrl: env('LLM_BASE_URL') ?? preset.baseUrl,
     apiKey,
-    model,
-    fastModel: env('LLM_FAST_MODEL') ?? preset.fastModel ?? model,
+    model: models[0]!,
+    fallbacks: models.slice(1),
+    fastModel: env('LLM_FAST_MODEL') ?? preset.fastModel ?? models[0]!,
     reasoning: reasoning === 'off' ? undefined : ((reasoning as Reasoning | undefined) ?? preset.reasoning),
   };
 }

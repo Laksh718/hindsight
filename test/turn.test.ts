@@ -19,7 +19,7 @@ const TZ = 'Asia/Kolkata';
 function scriptedModel(script: Array<StreamEvent[]>, ledgerJson: string) {
   const seen: ChatMessage[][] = [];
   const model = {
-    cfg: { provider: 'test', label: 'Test', baseUrl: 'http://x', apiKey: 'k', model: 'm', fastModel: 'f' },
+    cfg: { provider: 'test', label: 'Test', baseUrl: 'http://x', apiKey: 'k', model: 'm', fallbacks: [], fastModel: 'f' },
     async *stream(opts: { messages: ChatMessage[] }) {
       seen.push(structuredClone(opts.messages));
       for (const ev of script.shift() ?? []) yield ev;
@@ -119,7 +119,7 @@ test('search, cite, answer, remember; then recall it a week later', async () => 
 test('model errors reach the user as an error event, and the question is still saved', async () => {
   const store = await new MemoryStore(await mkdtemp(path.join(tmpdir(), 'hindsight-'))).load();
   const broken = {
-    cfg: { provider: 'test', label: 'Test', baseUrl: 'http://x', apiKey: 'k', model: 'm', fastModel: 'f' },
+    cfg: { provider: 'test', label: 'Test', baseUrl: 'http://x', apiKey: 'k', model: 'm', fallbacks: [], fastModel: 'f' },
     async *stream() {
       throw Object.assign(new Error('Test rate limit reached.'), { retryable: true });
     },

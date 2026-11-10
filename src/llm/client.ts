@@ -61,21 +61,25 @@ function friendlyError(status: number, body: string, cfg: LlmConfig): LlmError {
     detail = err?.message ?? detail;
   } catch {}
   if (status === 401 || status === 403) return new LlmError(`${cfg.label} rejected the API key. Check it in .env.`, status);
-  if (status === 404) return new LlmError(`${cfg.label} has no model "${cfg.model}". Set LLM_MODEL in .env. (${detail})`, status);
+  if (status === 404) return new LlmError(`${cfg.label} does not offer that model. Set LLM_MODEL in .env. (${detail})`, status, true);
   if (status === 429) return new LlmError(`${cfg.label} rate limit reached (free tiers allow a few requests a minute). Try again shortly.`, status, true);
-  if (status >= 500) return new LlmError(`${cfg.label} is having trouble (${status}). Try again.`, status, true);
+  if (status >= 500) return new LlmError(`${cfg.label} is overloaded right now (${status}). Try again in a moment.`, status, true);
   return new LlmError(`${cfg.label} error ${status}: ${detail}`, status);
 }
+
+/**
+ * Free tiers are spiky: a model can return 503 "high demand" for minutes.
+ * Each request walks the model chain (LLM_MODEL=a,b,c) and benches a model
+ * that failed for a minute, so later turns skip it instead of paying for it.
+ */
+const BENCH_MS = 60_000;
+const benched = new Map<string, number>();
 
 export class LlmClient {
   constructor(readonly cfg: LlmConfig) {}
 
   private async post(opts: RequestOptions, stream: boolean): Promise<Response> {
-    const body: Record<string, unknown> = {
-      model: opts.model ?? this.cfg.model,
-      messages: opts.messages,
-      stream,
-    };
+    const body: Record<string, unknown> = { messages: opts.messages, stream };
     if (opts.tools?.length) {
       body.tools = opts.tools;
       body.tool_choice = opts.toolChoice ?? 'auto';
@@ -85,22 +89,32 @@ export class LlmClient {
     if (this.cfg.reasoning) body.reasoning_effort = this.cfg.reasoning;
 
     const url = new URL('chat/completions', this.cfg.baseUrl.endsWith('/') ? this.cfg.baseUrl : `${this.cfg.baseUrl}/`);
-    // One quiet retry on rate limits and 5xx: free tiers hiccup.
-    for (let attempt = 0; ; attempt++) {
+    const chain = [...new Set([opts.model ?? this.cfg.model, ...this.cfg.fallbacks])];
+    const now = Date.now();
+    const ready = chain.filter((m) => (benched.get(m) ?? 0) < now);
+    const order = ready.length ? ready : chain; // everything benched: try anyway
+
+    let last: LlmError | undefined;
+    for (const model of order) {
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: `Bearer ${this.cfg.apiKey}` },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ ...body, model }),
         signal: opts.signal,
       });
-      if (res.ok) return res;
-      const text = await res.text();
-      const err = friendlyError(res.status, text, this.cfg);
-      if (!err.retryable || attempt >= 1) throw err;
-      const wait = Math.min(Number(res.headers.get('retry-after')) * 1000 || 1500, 4000);
-      await new Promise((r) => setTimeout(r, wait));
+      if (res.ok) {
+        this.lastModel = model;
+        return res;
+      }
+      last = friendlyError(res.status, await res.text(), this.cfg);
+      if (!last.retryable) throw last;
+      benched.set(model, Date.now() + BENCH_MS);
     }
+    throw last ?? new LlmError('No model available');
   }
+
+  /** The model that served the most recent request, for display. */
+  lastModel?: string;
 
   /** Stream a reply: text deltas as they arrive, tool calls once complete. */
   async *stream(opts: RequestOptions): AsyncGenerator<StreamEvent> {
