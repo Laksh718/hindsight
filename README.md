@@ -6,7 +6,9 @@ A chat agent with one tool, web search, and a dated memory. It cites what it fin
 >
 > Hindsight reads "last Tuesday" as Tue 3 Nov, recalls that conversation and the prices it recorded, searches each one again in parallel, and answers with a Then / Now table.
 
-**Live demo (recorded, no server):** https://laksh718.github.io/hindsight/
+**Live demo (recorded, no server):** https://laksh718.github.io/hindsight/ (landing page, the agent at `chat.html`, a replay of a real turn through the architecture at `how.html`)
+
+Built by [Laksh](https://laksh.codes).
 
 ## Run it
 

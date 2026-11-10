@@ -9,6 +9,7 @@
 import { LiveApi, ReplayApi } from './api.js';
 import { el, esc, renderAnswer, sourcesTable, ledgerTable, citedNumbers } from './render.js';
 import { startCosmos } from './cosmos.js';
+import { openConstellation, closeConstellation } from './constellation.js';
 
 const $ = (sel) => document.querySelector(sel);
 // Same UI, three back ends: this server, a hosted API (data-api), or a recording (data-replay).
@@ -594,6 +595,24 @@ function wire() {
       t.closest('.turn')?.remove();
       ask(t.dataset.retry);
     } else if (t.dataset.action === 'toggle-memory') toggleDrawer();
+    else if (t.dataset.action === 'sky') {
+      toggleDrawer(false);
+      openConstellation({
+        api,
+        now: () => clock.now(),
+        formatDay: (d) => `${formatDay(d)}, ${formatTime(d)}`,
+        onOpen: (id) => {
+          closeConstellation();
+          location.hash = `#/c/${id}`;
+        },
+        onRecheck: (title, at) => {
+          closeConstellation();
+          recheck(title, at);
+        },
+        onShow: () => state.cosmos?.pause?.(),
+        onHide: () => state.cosmos?.resume?.(),
+      });
+    } else if (t.dataset.action === 'sky-close') closeConstellation();
     else if (t.dataset.action === 'reload') route();
     else if (t.dataset.action === 'clock-reset') {
       clock.reset();
@@ -623,6 +642,9 @@ function wire() {
   });
 
   window.addEventListener('hashchange', route);
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !document.getElementById('sky-map').hidden) closeConstellation();
+  });
   setInterval(paintClock, 30_000);
 }
 
@@ -634,7 +656,7 @@ function cosmosTarget() {
   // A surge when the agent reaches into the past: memory recalled, the sky lurches inward.
   const surge = (state.warpUntil ?? 0) > performance.now() ? 1 : 0;
   const goal = {
-    lens: welcome ? 1700 : 800,
+    lens: welcome ? 1300 : 600,
     warp: Math.max(state.busy ? 0.7 : 0, surge),
     // Behind a conversation the sky steps back, so text reads first.
     dim: welcome ? 1 : 0.42,
@@ -651,7 +673,7 @@ function cosmosTarget() {
 
 async function boot() {
   wire();
-  startCosmos($('#cosmos'), cosmosTarget);
+  state.cosmos = startCosmos($('#cosmos'), cosmosTarget);
   paintClock();
   try {
     state.status = await api.status();

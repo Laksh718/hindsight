@@ -22,6 +22,7 @@
       <nav aria-label="Site">
         <a href="how.html">How it works</a>
         <a href="https://github.com/Laksh718/hindsight">Code</a>
+        <a class="credit" href="https://laksh.codes" target="_blank" rel="noopener">By Laksh</a>
         <a class="pill pill--primary" href="chat.html">Open the agent</a>
       </nav>
     </div>
@@ -29,7 +30,7 @@
 
   <main id="main">
     <section class="hero wrap">
-      <h1 class="hero__logo" data-lens data-lens-strength="1800">hindsight<span class="logo__dot">.</span></h1>
+      <h1 class="hero__logo" data-lens data-lens-strength="2000" data-tilt>hindsight<span class="logo__dot">.</span></h1>
       <p class="hero__line">A search agent that remembers what it told you, and when.</p>
       <div class="hero__actions">
         <a class="pill pill--primary" href="chat.html">Ask it something</a>
@@ -40,7 +41,6 @@
     <section class="section wrap" aria-labelledby="q-head">
       <div class="section__head" data-reveal>
         <h2 id="q-head">Questions about time</h2>
-        <p>Most agents answer them from scratch. Hindsight starts from what it said.</p>
       </div>
       <ul class="questions">
         <li class="question" data-reveal style="--i:0">
@@ -59,25 +59,21 @@
     </section>
 
     <section class="section wrap" aria-labelledby="t-head">
-      <div class="thennow">
-        <div class="section__head" data-reveal>
-          <h2 id="t-head">Then, now, and what changed</h2>
-          <p>Answers leave dated claims. “Still true?” rechecks them.</p>
+      <div class="section__head" data-reveal>
+        <h2 id="t-head">Then, now, and what changed</h2>
+      </div>
+      <div class="live" data-reveal style="--i:1">
+        <div class="live__bar">
+          <span class="live__q" id="live-q" aria-live="polite"></span>
         </div>
-        <figure data-reveal style="--i:1">
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Provider</th><th class="num">Then (3 Nov)</th><th class="num">Now (10 Nov)</th><th>Status</th></tr></thead>
-              <tbody>
-                <tr><td>Railway</td><td class="num was">$5/mo</td><td class="num">$5/mo</td><td class="status">Unchanged</td></tr>
-                <tr class="changed"><td>Neon</td><td class="num was">~$5 to $15/mo</td><td class="num">~$19/mo</td><td class="status">Changed</td></tr>
-                <tr class="changed"><td>Render</td><td class="num was">$7/mo</td><td class="num">$6/mo</td><td class="status">Changed</td></tr>
-                <tr><td>Supabase</td><td class="num was">$25/mo</td><td class="num">$25/mo</td><td class="status">Unchanged</td></tr>
-              </tbody>
-            </table>
-          </div>
-          <figcaption>Both runs were recorded on 10 Nov, so a change may be search noise.</figcaption>
-        </figure>
+        <ol class="live__pipe" aria-label="What the agent did">
+          <li data-step="recall"><span>recall</span><b></b></li>
+          <li data-step="search"><span>search</span><b></b></li>
+          <li data-step="answer"><span>answer</span><b></b></li>
+          <li data-step="remember"><span>remember</span><b></b></li>
+        </ol>
+        <div class="live__answer prose" id="live-answer"></div>
+        <p class="live__note">A real recorded answer, replayed. Both runs were recorded the same day, so a change may be search noise.</p>
       </div>
     </section>
 
@@ -104,5 +100,6 @@
   </footer>
 
   <script type="module" src="site.js"></script>
+  <script type="module" src="live.js"></script>
 </body>
 </html>

@@ -38,3 +38,21 @@ if ('IntersectionObserver' in window) {
 } else {
   reveal.forEach((el) => el.classList.add('is-in'));
 }
+
+// The logo pops out: it tilts toward the pointer in 3D, like something with depth.
+const tilt = document.querySelector('[data-tilt]');
+if (tilt && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  let rx = 0, ry = 0, tx = 0, ty = 0;
+  addEventListener('pointermove', (e) => {
+    const r = tilt.getBoundingClientRect();
+    tx = ((e.clientY - (r.top + r.height / 2)) / innerHeight) * -6;
+    ty = ((e.clientX - (r.left + r.width / 2)) / innerWidth) * 8;
+  }, { passive: true });
+  const loop = () => {
+    rx += (tx - rx) * 0.08;
+    ry += (ty - ry) * 0.08;
+    tilt.style.transform = `perspective(900px) rotateX(${rx.toFixed(2)}deg) rotateY(${ry.toFixed(2)}deg) translateZ(30px)`;
+    requestAnimationFrame(loop);
+  };
+  requestAnimationFrame(loop);
+}

@@ -98,7 +98,11 @@ Temporal features are otherwise untestable in a weekend. You cannot wait until M
 
 ## The UI
 
-Designed with the Hallmark skill, in a custom direction taken from a reference video: pure black, a slow starfield, a centred grotesk head (Geist) and one large composer. The signature is a lensed starfield (`public/cosmos.js`), one WebGL fragment shader built on gravitational lensing. Each pixel looks the star field up at a point pulled toward the composer by k / (d + c), where d is the distance to its rounded rectangle. Far stars barely move; near the rim they are pushed outward, squeezed into a dense band, and drawn slightly stretched along the edge, the short arcs a lens makes, while every star stays a separate point. The pointer is a second, smaller lens with the same behaviour, and it drives parallax across four depths. The page feeds it every frame: the composer's box (so the lens follows it from the centre to its dock), focus (the rim brightens), and whether the agent is working (the sky drifts faster, integrated so it never jumps). Decorative only (`aria-hidden`); a 2D fallback runs without WebGL, and reduced motion gets one still frame. Coral is the one signal colour, kept for change: "Changed" in a recheck table, and the clock while time-travelling.
+Three pages, plain HTML, CSS and ES modules, no build step: `index.html` (landing), `chat.html` (the agent) and `how.html` (a recorded turn replayed through a diagram of the parts). Designed with the Hallmark skill in a custom direction: black, Geist, one coral signal.
+
+The backdrop (`public/cosmos.js`) is one WebGL shader: a black hole. The star field falls toward the mass (the composer, or the landing page's logo) in two cross-fading zoom layers, so stars spiral inward, shrink and fade at the horizon; a gentle lens bends them around the mass and around the pointer. It is still until you move or scroll, eases to a stop, and drifts while the agent is thinking. Rendered at 1x, paused when hidden or behind the memory map, a 2D fallback without WebGL, one still frame under reduced motion.
+
+The memory constellation (`public/constellation.js`) draws every past conversation as a star on a spiral of time, newest on the edge, joined by lines when their claims share a subject; any star opens or rechecks its conversation.
 
 Each answer shows:
 

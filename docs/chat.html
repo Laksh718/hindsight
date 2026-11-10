@@ -19,8 +19,10 @@
   <header class="bar">
     <a class="logo" href="index.html" aria-label="Hindsight home">hindsight<span class="logo__dot" aria-hidden="true">.</span></a>
     <p class="bar__model readout" id="model-line"></p>
+    <button class="ghost" type="button" data-action="sky"><span class="label-long">Constellation</span><span class="label-short" aria-hidden="true">Sky</span></button>
     <button class="ghost" type="button" aria-controls="memory" aria-expanded="false" data-action="toggle-memory">Memory <span class="readout" id="memory-count"></span></button>
     <a class="ghost" href="how.html">How it works</a>
+    <a class="ghost ghost--credit" href="https://laksh.codes" target="_blank" rel="noopener">By Laksh</a>
     <a class="ghost" href="#/" data-action="new">New</a>
   </header>
 
@@ -47,6 +49,20 @@
     </div>
     <p class="memory__credit">Built by <a href="https://laksh.codes" target="_blank" rel="noopener">Laksh</a>. <a href="index.html">About hindsight.</a></p>
   </nav>
+
+  <div class="sky-map" id="sky-map" hidden role="dialog" aria-modal="true" aria-label="Your memory as a constellation">
+    <div class="sky-map__head">
+      <div>
+        <h2>Your memory, as a sky</h2>
+        <p>Newest on the edge; older memories spiral into the centre. Lines join answers about the same thing.</p>
+      </div>
+      <button class="ghost sky-map__close" type="button" data-action="sky-close">Close</button>
+    </div>
+    <div class="sky-map__body">
+      <svg viewBox="0 0 1000 680" role="group" aria-label="Past conversations placed by age"></svg>
+      <aside class="sky-map__card" hidden></aside>
+    </div>
+  </div>
 
   <main class="main" id="main">
     <section class="hero" id="hero"></section>

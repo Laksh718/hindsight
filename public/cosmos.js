@@ -101,20 +101,20 @@ void main() {
   // drawn; every star is still a point, only displaced.
   float dd = max(d, 0.0);
   // Capped, so the corners (where the normal turns) cannot focus one star into a long ring.
-  vec2 boxLens = n * min((uLens * uGlow) / (dd + uCore), 55.0);
+  vec2 boxLens = n * min((uLens * uGlow) / (dd + uCore), 28.0);
   vec2 toMouse = px - uMouse.xy;
   float md = length(toMouse);
-  vec2 mouseLens = normalize(toMouse + 1e-5) * (5200.0 / (md + 70.0)) * uMouse.z;
+  vec2 mouseLens = normalize(toMouse + 1e-5) * (2200.0 / (md + 90.0)) * uMouse.z;
   vec2 parallax = (uMouse.xy - uRes / (2.0 * uDpr)) * uMouse.z;
   vec2 src = px - boxLens - mouseLens;
 
   // Each lens also stretches stars along its edge (its tangent). The stronger lens here wins.
   float boxPull = (uLens * uGlow) / ((dd + uCore) * (dd + uCore));
-  float mousePull = 5200.0 * uMouse.z / ((md + 70.0) * (md + 70.0));
+  float mousePull = 2200.0 * uMouse.z / ((md + 90.0) * (md + 90.0));
   vec2 tBox = vec2(-n.y, n.x);
   vec2 tMouse = normalize(vec2(-toMouse.y, toMouse.x) + 1e-5);
   vec2 tdir = boxPull >= mousePull ? tBox : tMouse;
-  float stretch = 1.0 + min(boxPull + mousePull, 1.0) * 4.5; // a short arc, never a line
+  float stretch = 1.0 + min(boxPull + mousePull, 1.0) * 2.2; // a slight arc, never a line
 
   // The black hole. The whole sky falls in: each of two layers zooms the star
   // field toward the mass (stars move inward, shrink and dim as they go deeper)
@@ -132,7 +132,7 @@ void main() {
     float cs = cos(turn);
     float sn = sin(turn);
     vec2 zq = vec2(cs * q.x - sn * q.y, sn * q.x + cs * q.y) * zoom + float(k) * vec2(731.0, 377.0);
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 2; i++) {
       float depth = float(i) + 1.0;
       vec2 u = zq - parallax * 0.012 * depth;
       vec4 s = star(u, vec2(44.0 + 30.0 * depth), 0.5, (0.75 + 0.45 * depth) * sqrt(zoom), tdir, stretch);
@@ -142,9 +142,9 @@ void main() {
     }
   }
   // Stars vanish as they cross the horizon: the mass's edge.
-  tint *= smoothstep(0.0, 90.0, dd);
+  tint *= smoothstep(0.0, 36.0, dd);
   // Lensing concentrates light: squeezed, stretched stars near an edge shine brighter.
-  tint *= 1.0 + min(boxPull + mousePull, 1.2) * 1.1;
+  tint *= 1.0 + min(boxPull + mousePull, 1.0) * 0.5;
   tint *= uDim;
 
   // A hairline of light on the rim (the composer only).
@@ -216,7 +216,7 @@ export function startCosmos(canvas, getTarget) {
   const still = matchMedia('(prefers-reduced-motion: reduce)');
   let dpr = 1;
   function resize() {
-    dpr = Math.min(window.devicePixelRatio || 1, 1.5); // the field is soft; full retina costs more than it shows
+    dpr = 1; // the field is soft: rendering at 1x keeps every frame smooth on any machine
     canvas.width = Math.round(canvas.clientWidth * dpr);
     canvas.height = Math.round(canvas.clientHeight * dpr);
     gl.viewport(0, 0, canvas.width, canvas.height);
@@ -224,10 +224,21 @@ export function startCosmos(canvas, getTarget) {
 
   // The pointer, eased so the sky follows it like something with mass.
   const mouse = { x: innerWidth / 2, y: innerHeight / 2, tx: innerWidth / 2, ty: innerHeight / 2, on: 0, ton: 0 };
+  // The sky is still until you move: pointer speed and scrolling pour energy in,
+  // and it drains away in about a second, so the fall coasts to a stop.
+  let activity = 0;
+  let wanted = 0; // input sets a target; activity eases toward it, so motion never jolts
+  let lastScroll = scrollY;
   addEventListener('pointermove', (e) => {
+    const speed = Math.hypot(e.clientX - mouse.tx, e.clientY - mouse.ty);
+    wanted = Math.min(wanted + speed / 900, 0.6);
     mouse.tx = e.clientX;
     mouse.ty = e.clientY;
     mouse.ton = e.pointerType === 'mouse' ? 1 : 0.6;
+  }, { passive: true });
+  addEventListener('scroll', () => {
+    wanted = Math.min(wanted + Math.abs(scrollY - lastScroll) / 600, 0.6);
+    lastScroll = scrollY;
   }, { passive: true });
   document.documentElement.addEventListener('pointerleave', () => (mouse.ton = 0));
 
@@ -240,9 +251,12 @@ export function startCosmos(canvas, getTarget) {
     const dt = Math.min((now - last) / 1000, 0.05);
     last = now;
     const target = getTarget();
-    time += dt;
-    drift += dt * target.energy; // integrated, so a change of speed never makes the sky jump
-    fall += dt * (1 + 3.5 * (target.warp ?? 0)) * (still.matches ? 0 : 1); // about 6 s a cycle, faster while working
+    wanted *= Math.exp(-dt * 0.9);
+    activity += (wanted - activity) * (1 - Math.exp(-dt * 2.5));
+    const moving = activity + 0.5 * (target.warp ?? 0); // the agent thinking also moves it, gently
+    time += dt * Math.min(moving * 2, 1);               // even the twinkle rests when you do
+    drift += dt * target.energy * moving;
+    fall += dt * moving * 0.45 * (still.matches ? 0 : 1); // a slow drift inward, never a rush
     const ease = 1 - Math.exp(-dt * 6);
     mouse.x += (mouse.tx - mouse.x) * ease;
     mouse.y += (mouse.ty - mouse.y) * ease;
@@ -280,7 +294,11 @@ export function startCosmos(canvas, getTarget) {
   });
   still.addEventListener('change', start);
   document.addEventListener('visibilitychange', () => (document.hidden ? cancelAnimationFrame(raf) : start()));
-  return { redraw: start };
+  return {
+    redraw: start,
+    pause: () => cancelAnimationFrame(raf),
+    resume: start,
+  };
 }
 
 /* The flat fallback: points drifting in orbit around the composer, on a 2D canvas. */

@@ -290,6 +290,43 @@ a:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; bo
 .conv__recheck:active { transform: translateY(1px); }
 .memory__credit { margin-top: var(--space-xl); padding-top: var(--space-md); border-top: var(--rule-hair) solid var(--color-rule); font-size: var(--text-xs); color: var(--color-muted); }
 
+
+/* The memory constellation */
+.label-short { display: none; }
+.sky-map { position: fixed; inset: 0; z-index: var(--z-modal); display: grid; grid-template-rows: auto minmax(0, 1fr); gap: var(--space-md); padding: var(--space-lg); background: var(--color-paper); opacity: 0; transition: opacity var(--dur-long) var(--ease-out); }
+.sky-map.is-open { opacity: 1; }
+.sky-map__head { display: flex; align-items: start; justify-content: space-between; gap: var(--space-lg); max-width: var(--container); width: 100%; margin-inline: auto; }
+.sky-map__head h2 { font-size: clamp(1.6rem, 3vw, 2.4rem); letter-spacing: -0.04em; }
+.sky-map__head p { max-width: 52ch; margin-top: var(--space-2xs); font-size: var(--text-sm); color: var(--color-muted); }
+.sky-map__body { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 20rem; gap: var(--space-lg); align-items: center; max-width: var(--container); width: 100%; margin-inline: auto; min-height: 0; }
+.sky-map__body svg { width: 100%; height: 100%; max-height: 74dvh; overflow: visible; }
+.sky-path { fill: none; stroke: var(--color-rule-2); stroke-width: 1; stroke-dasharray: 2 6; }
+.sky-hole { fill: var(--color-paper); stroke: var(--color-rule-2); }
+.sky-end { fill: var(--color-muted); font: 400 12px var(--font-outlier); }
+.sky-empty { fill: var(--color-muted); font: 400 15px var(--font-body); }
+.sky-lines path { fill: none; stroke: var(--color-rule-2); stroke-width: 1; opacity: 0; animation: fade-in 900ms var(--ease-out) forwards; animation-delay: calc(500ms + var(--i, 0) * 50ms); transition: stroke var(--dur-short) var(--ease-out); }
+.sky-lines path.is-lit { stroke: var(--color-ink); }
+@keyframes fade-in { to { opacity: 1; } }
+.sky-star { cursor: pointer; outline: none; }
+.sky-star__in { opacity: 0; animation: fade-in 500ms var(--ease-out) forwards; animation-delay: calc(var(--i, 0) * 45ms); }
+.sky-star__core { fill: var(--color-ink-2); transition: fill var(--dur-short) var(--ease-out); }
+.sky-star__halo { fill: var(--color-ink); opacity: 0.06; transition: opacity var(--dur-short) var(--ease-out); }
+.sky-star.is-sim .sky-star__core { fill: var(--color-star-cool); }
+.sky-star:hover .sky-star__halo, .sky-star:focus-visible .sky-star__halo, .sky-star.is-current .sky-star__halo { opacity: 0.18; }
+.sky-star:hover .sky-star__core, .sky-star.is-current .sky-star__core { fill: var(--color-signal); }
+.sky-star:focus-visible .sky-star__core { stroke: var(--color-focus); stroke-width: 2; }
+.sky-star__label { fill: var(--color-ink); font: 500 13px var(--font-body); }
+.sky-star__date { fill: var(--color-muted); font: 400 11px var(--font-outlier); }
+.sky-map__card { display: grid; gap: var(--space-xs); padding: var(--space-lg); border-radius: var(--radius-card); background: var(--color-paper-2); color: var(--color-ink-2); box-shadow: inset 0 0 0 var(--rule-hair) var(--color-rule-2), var(--shadow-card); animation: rise 360ms var(--ease-out) both; }
+.sky-map__card h3 { font-size: var(--text-xl); letter-spacing: -0.02em; }
+.sky-card__date, .sky-card__meta { font: 400 var(--text-xs)/1.4 var(--font-outlier); color: var(--color-muted); }
+.sky-card__q { font-size: var(--text-sm); color: var(--color-ink-2); }
+.sky-card__actions { display: flex; flex-wrap: wrap; gap: var(--space-xs); margin-top: var(--space-xs); }
+@media (max-width: 60rem) {
+  .sky-map__body { grid-template-columns: minmax(0, 1fr); align-content: start; }
+  .sky-map__body svg { max-height: 52dvh; }
+}
+
 /* Motion: arrivals only, and only when scripting runs (content is visible without it). */
 @keyframes rise { from { opacity: 0; transform: translateY(14px); } }
 .js [data-view="welcome"] .hero h1 { animation: rise 900ms var(--ease-out) both; }
@@ -303,7 +340,11 @@ a:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; bo
   .bar { padding: 0 var(--space-sm); }
   .bar__model { display: none; }
   .logo { margin-right: auto; }
-  .bar a.ghost[href="how.html"] { display: none; }
+  .bar { gap: 0; }
+  .bar .ghost { padding: 0 var(--space-xs); }
+  .label-long { display: none; }
+  .label-short { display: inline; }
+  .bar a.ghost[href="how.html"], .bar .ghost--credit { display: none; }
   .main { padding: 0 var(--space-md); }
   [data-view="welcome"] .hero { padding-bottom: var(--space-lg); }
   .composer textarea { font-size: var(--text-md); }
@@ -316,7 +357,9 @@ a:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; bo
   .round { --round: 44px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .js [data-view="welcome"] .hero h1, .js [data-view="welcome"] .hero p, .js .starters li, .js .turn, .js .fold, .js .chip, .js .turn.is-settled .answer tbody tr { animation: none; }
+  .js [data-view="welcome"] .hero h1, .js [data-view="welcome"] .hero p, .js .starters li, .js .turn, .js .fold, .js .chip, .js .turn.is-settled .answer tbody tr, .sky-map__card { animation: none; }
+  .sky-star__in, .sky-lines path { animation: none; opacity: 1; }
+  .sky-map { transition: none; }
   .pipe li[data-state="active"]::before { animation: none; }
   .prose[aria-busy="true"] > :last-child::after { animation: none; }
   .js .memory, .js .memory[data-open] { transition: opacity 150ms linear; }
