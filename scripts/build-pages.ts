@@ -1,38 +1,33 @@
 /**
- * Build the GitHub Pages site into docs/.
+ * Build the GitHub Pages site into docs/: a copy of public/ (landing page,
+ * the agent, the architecture page, the recorded session).
  *
- *   docs/               the real UI, copied from public/, in replay mode
- *   docs/demo/          session.json, recorded by `npm run seed -- --record docs/demo`
+ * The copy is identical to what `npm run dev` serves, except that chat.html's
+ * <html> tag carries data-api (call a hosted API, e.g. on Vercel, so keys
+ * stay on the server) or data-replay (play back public/demo/session.json, no
+ * server at all).
  *
- * The app copy is identical to what `npm run dev` serves, except that the
- * <html> tag carries data-api (call a hosted API, e.g. on Vercel) or
- * data-replay (play back a recorded session, no server at all).
+ *   npm run pages                                          replay mode
+ *   HINDSIGHT_API=https://<app>.vercel.app npm run pages   live, via Vercel
  */
-import { cp, mkdir, readFile, rm, writeFile, access } from 'node:fs/promises';
+import { access, cp, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 const root = path.resolve(import.meta.dirname, '..');
 const out = path.join(root, 'docs');
 
-// Replace the UI files, keep the recorded demo.
-for (const f of ['index.html', 'app.js', 'api.js', 'render.js', 'favicon.svg', 'styles', 'vendor', 'app']) {
-  await rm(path.join(out, f), { recursive: true, force: true });
-}
-await mkdir(out, { recursive: true });
+await rm(out, { recursive: true, force: true });
 await cp(path.join(root, 'public'), out, { recursive: true });
+await writeFile(path.join(out, '.nojekyll'), '');
 
-// With HINDSIGHT_API set (your Vercel URL), the Pages copy talks to that live
-// API: keys stay on the server. Without it, the page replays a recorded session.
 const api = process.env.HINDSIGHT_API?.replace(/\/$/, '');
-const indexPath = path.join(out, 'index.html');
-const html = await readFile(indexPath, 'utf8');
-await writeFile(indexPath, html.replace('<html lang="en">', api ? `<html lang="en" data-api="${api}">` : '<html lang="en" data-replay="demo">'));
-if (api) console.log(`Pages UI will call the live API at ${api}`);
-await writeFile(path.join(root, 'docs', '.nojekyll'), '');
+const chat = path.join(out, 'chat.html');
+const html = await readFile(chat, 'utf8');
+await writeFile(chat, html.replace('<html lang="en">', api ? `<html lang="en" data-api="${api}">` : '<html lang="en" data-replay="demo">'));
 
 try {
-  await access(path.join(root, 'docs/demo/session.json'));
-  console.log('Built docs/ (replay mode). Demo session found.');
+  await access(path.join(out, 'demo/session.json'));
+  console.log(api ? `Built docs/: the agent calls ${api}.` : 'Built docs/: the agent replays public/demo/session.json.');
 } catch {
-  console.log('Built docs/, but docs/demo/session.json is missing. Record one: npm run seed -- --record docs/demo');
+  console.log('Built docs/, but there is no recorded session. Record one: npm run seed -- --record public/demo');
 }

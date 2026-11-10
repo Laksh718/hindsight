@@ -14,7 +14,7 @@
   --color-rule: oklch(21% 0.006 275); --color-rule-2: oklch(33% 0.008 275); --color-rim: oklch(97% 0.003 275 / 0.42);
   --color-accent: oklch(97% 0.003 275); --color-accent-2: oklch(86% 0.005 275); --color-accent-ink: oklch(9% 0.004 275);
   --color-signal: oklch(74% 0.13 28); --color-live: oklch(80% 0.13 155); --color-focus: oklch(82% 0.09 250);
-  --color-star: oklch(97% 0.003 275); --color-star-cool: oklch(86% 0.06 250);
+  --color-star: oklch(97% 0.003 275); --color-star-cool: oklch(86% 0.06 250); --color-star-warm: oklch(90% 0.05 70);
   --color-veil: oklch(6.5% 0.004 275 / 0.72);
   --font-display: "Geist", ui-sans-serif, system-ui, sans-serif; --font-body: "Geist", ui-sans-serif, system-ui, sans-serif;
   --font-outlier: "Geist Mono", ui-monospace, monospace;

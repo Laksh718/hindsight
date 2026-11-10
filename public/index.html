@@ -3,76 +3,106 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Hindsight</title>
-  <meta name="description" content="A chat agent that searches the web, cites its sources, and remembers what it told you and when.">
+  <title>Hindsight, a chat agent that remembers</title>
+  <meta name="description" content="A chat agent with web search that remembers what it told you, and when, then checks whether it still holds.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400&display=swap" rel="stylesheet">
   <script>document.documentElement.classList.add('js')</script>
-  <link rel="stylesheet" href="styles/app.css">
+  <link rel="stylesheet" href="styles/site.css">
   <link rel="icon" href="favicon.svg" type="image/svg+xml">
 </head>
-<body data-view="welcome">
+<body>
   <canvas class="cosmos" id="cosmos" aria-hidden="true"></canvas>
-  <a class="skip" href="#ask">Skip to the question box</a>
+  <a class="skip" href="#main">Skip to the content</a>
 
-  <header class="bar">
-    <a class="wordmark" href="#/" aria-label="Hindsight, new conversation">hindsight</a>
-    <p class="bar__model readout" id="model-line"></p>
-    <button class="ghost" type="button" aria-controls="memory" aria-expanded="false" data-action="toggle-memory">Memory <span class="readout" id="memory-count"></span></button>
-    <a class="ghost" href="#/" data-action="new">New</a>
+  <header class="site-bar">
+    <div class="wrap">
+      <a class="logo" href="index.html" aria-label="Hindsight home">hindsight<span class="logo__dot" aria-hidden="true">.</span></a>
+      <nav aria-label="Site">
+        <a href="how.html">How it works</a>
+        <a href="https://github.com/Laksh718/hindsight">Code</a>
+        <a class="pill pill--primary" href="chat.html">Open the agent</a>
+      </nav>
+    </div>
   </header>
 
-  <div class="clock-panel" id="clock-panel" popover>
-    <form class="clock-panel__form" id="clock-form">
-      <h2>Time travel</h2>
-      <p class="clock-panel__note">Move the agent’s clock to test memory: talk “on Monday”, come back to now, and ask what changed. Web search always sees today.</p>
-      <label for="clock-input">Pretend it is</label>
-      <input id="clock-input" name="at" type="datetime-local" required>
-      <div class="clock-panel__actions">
-        <button class="pill pill--primary" type="submit">Set the clock</button>
-        <button class="pill" type="button" data-action="clock-reset">Back to now</button>
+  <main id="main">
+    <section class="hero wrap">
+      <h1 class="hero__logo" data-lens data-lens-strength="3000">hindsight<span class="logo__dot">.</span></h1>
+      <p class="hero__line">A search agent that remembers what it told you, and when.</p>
+      <div class="hero__actions">
+        <a class="pill pill--primary" href="chat.html">Ask it something</a>
+        <a class="pill" href="how.html">Watch it think</a>
       </div>
-    </form>
-  </div>
+    </section>
 
-  <nav class="memory" id="memory" aria-label="Past conversations">
-    <div class="memory__head">
-      <h2>Memory</h2>
-      <button class="ghost" type="button" data-action="toggle-memory">Close</button>
-    </div>
-    <div id="memory-list" class="memory__list" aria-busy="true">
-      <div class="skeleton" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
-    </div>
-  </nav>
+    <section class="section wrap" aria-labelledby="q-head">
+      <div class="section__head" data-reveal>
+        <h2 id="q-head">Questions about time</h2>
+        <p>Most agents answer them from scratch. Hindsight starts from what it said.</p>
+      </div>
+      <ul class="questions">
+        <li class="question" data-reveal style="--i:0">
+          <blockquote>“What did I ask you on 3 November? Still correct?”</blockquote>
+          <p class="trail">dates, recalls, rechecks</p>
+        </li>
+        <li class="question" data-reveal style="--i:1">
+          <blockquote>“On Monday we shortlisted 5 CRMs. Any price changes since?”</blockquote>
+          <p class="trail">dates, recalls, searches</p>
+        </li>
+        <li class="question" data-reveal style="--i:2">
+          <blockquote>“What did I ask you on Saturday?”</blockquote>
+          <p class="trail">finds nothing, says so</p>
+        </li>
+      </ul>
+    </section>
 
-  <main class="main" id="main">
-    <section class="hero" id="hero"></section>
-    <section class="thread" id="thread" aria-live="off"></section>
-
-    <div class="dock" id="dock">
-      <form class="composer" id="composer">
-        <label class="visually-hidden" for="ask">Your question</label>
-        <textarea id="ask" name="message" rows="2" placeholder="Ask about anything current, or about something we discussed" autocomplete="off" enterkeyhint="send"></textarea>
-        <div class="composer__row">
-          <button class="round round--quiet clock" type="button" popovertarget="clock-panel" id="clock-button" aria-label="Time travel: change the date the agent believes it is">
-            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><circle cx="12" cy="12" r="8.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-          </button>
-          <span class="composer__date readout" id="clock-label">Today</span>
-          <span class="composer__model readout" id="model-chip"></span>
-          <button class="round round--primary" type="submit" id="send" aria-label="Ask">
-            <svg class="icon-send" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 18V6M6.5 11.5 12 6l5.5 5.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <svg class="icon-stop" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2" fill="currentColor"/></svg>
-          </button>
+    <section class="section wrap" aria-labelledby="t-head">
+      <div class="thennow">
+        <div class="section__head" data-reveal>
+          <h2 id="t-head">Then, now, and what changed</h2>
+          <p>Answers leave dated claims. “Still true?” rechecks them.</p>
         </div>
-      </form>
-      <ul class="starters" id="starters"></ul>
-      <p class="dock__hint">Enter sends. Shift and Enter for a new line.</p>
-    </div>
-    <p class="visually-hidden" role="status" id="announcer"></p>
+        <figure data-reveal style="--i:1">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Provider</th><th class="num">Then (3 Nov)</th><th class="num">Now (10 Nov)</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr><td>Railway</td><td class="num was">$5/mo</td><td class="num">$5/mo</td><td class="status">Unchanged</td></tr>
+                <tr class="changed"><td>Neon</td><td class="num was">~$5 to $15/mo</td><td class="num">~$19/mo</td><td class="status">Changed</td></tr>
+                <tr class="changed"><td>Render</td><td class="num was">$7/mo</td><td class="num">$6/mo</td><td class="status">Changed</td></tr>
+                <tr><td>Supabase</td><td class="num was">$25/mo</td><td class="num">$25/mo</td><td class="status">Unchanged</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <figcaption>Both runs were recorded on 10 Nov, so a change may be search noise.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="section wrap">
+      <div class="invite" data-reveal>
+        <div>
+          <h2>Watch a real turn move through it</h2>
+          <p>A recorded question, replayed through every part.</p>
+        </div>
+        <a class="pill pill--primary" href="how.html">See how it thinks</a>
+      </div>
+    </section>
   </main>
 
-  <noscript><p class="noscript">Hindsight needs JavaScript to talk to its server.</p></noscript>
-  <script type="module" src="app.js"></script>
+  <footer class="site-foot">
+    <div class="wrap">
+      <span>hindsight<span class="logo__dot">.</span> One tool, web search. A dated memory.</span>
+      <nav aria-label="More">
+        <a href="https://github.com/Laksh718/hindsight/blob/main/DESIGN.md">Design</a>
+        <a href="https://github.com/Laksh718/hindsight/blob/main/ARCHITECTURE.md">Architecture notes</a>
+        <a href="https://github.com/Laksh718/hindsight">Source</a>
+      </nav>
+    </div>
+  </footer>
+
+  <script type="module" src="site.js"></script>
 </body>
 </html>

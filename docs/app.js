@@ -265,11 +265,30 @@ function paintFoot(turn, message, claims) {
   const foot = turn.querySelector('.turn__foot');
   foot.innerHTML = '';
   const sources = message.sources ?? [];
+  const cited = citedNumbers(message.content);
+  const citedSources = sources.filter((s) => cited.has(s.n));
+
+  // The row under every answer: cited sources as chips, and a copy action.
+  const chips = citedSources
+    .map((s) => `<a class="chip" href="${esc(s.url)}" target="_blank" rel="noopener noreferrer" title="${esc(s.title)}"><span class="chip__n">${s.n}</span>${esc(s.domain)}</a>`)
+    .join('');
+  foot.append(
+    el(`<div class="answer-row">${chips ? `<div class="chips" aria-label="Sources cited">${chips}</div>` : ''}<button class="ghost ghost--small" type="button" data-copy>Copy</button></div>`),
+  );
+  foot.querySelector('[data-copy]').addEventListener('click', async (e) => {
+    const b = e.currentTarget;
+    try {
+      await navigator.clipboard.writeText(message.content);
+      b.textContent = 'Copied';
+    } catch {
+      b.textContent = 'Copy failed';
+    }
+    setTimeout(() => (b.textContent = 'Copy'), 2500);
+  });
+
   if (sources.length) {
-    const cited = citedNumbers(message.content);
-    const citedCount = sources.filter((s) => cited.has(s.n)).length;
     foot.append(
-      el(`<details class="fold sources"><summary>sources<span class="fold__meta">${citedCount} cited, ${sources.length} read</span></summary><div class="fold__body">${sourcesTable(sources, cited)}</div></details>`),
+      el(`<details class="fold sources"><summary>sources<span class="fold__meta">${citedSources.length} cited, ${sources.length} read</span></summary><div class="fold__body">${sourcesTable(sources, cited)}</div></details>`),
     );
   }
   if (claims?.length) {
@@ -278,6 +297,12 @@ function paintFoot(turn, message, claims) {
         <div class="fold__body"><p class="ledger__note">Ask later whether these still hold, and I will check each one again.</p>${ledgerTable(claims, domainOf)}</div></details>`),
     );
   }
+}
+
+/** When an answer completes, its table rows settle in one after another. */
+function settle(turn) {
+  turn.querySelectorAll('.answer tbody tr').forEach((tr, i) => tr.style.setProperty('--r', String(i)));
+  turn.classList.add('is-settled');
 }
 
 function paintStoredTurn(user, answer, conversation) {
@@ -328,7 +353,7 @@ async function route() {
   if (state.abort) state.abort.abort();
   if (!m) {
     state.currentId = null;
-    document.title = 'Hindsight';
+    document.title = 'Hindsight, the agent';
     paintMemory();
     await paintWelcome();
     $('#ask').focus();
@@ -469,6 +494,7 @@ async function ask(text) {
           for (const s of ev.message.sources ?? []) sources.set(s.n, s);
           renderAnswer(answerEl, draft, sources);
           answerEl.removeAttribute('aria-busy');
+          settle(turn);
           step(turn, 'answer', 'done', seconds(ev.message.ms ?? 0));
           step(turn, 'remember', 'active', 'reading the answer');
           paintFoot(turn, ev.message, []);

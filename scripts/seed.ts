@@ -4,7 +4,7 @@
  * you...") have something to point at on a fresh install.
  *
  *   npm run seed                      add two past conversations to ./data
- *   npm run seed -- --record docs/demo  also ask the follow-up questions now,
+ *   npm run seed -- --record public/demo  also ask the follow-up questions now,
  *                                       and record every event for the Pages demo
  *
  * Nothing here is invented: each seeded conversation is a real agent run with

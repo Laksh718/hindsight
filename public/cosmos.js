@@ -32,13 +32,23 @@ uniform float uCore;      // softening, px: smaller is a sharper lens
 uniform float uDrift;     // accumulated drift time: advances faster while the agent works
 uniform float uGlow;      // lens and rim strength: full on welcome, softer in a chat
 uniform float uFocus;     // rim boost when the composer has focus
+uniform float uRim;       // 1 draws the rim (the composer); 0 leaves the mass unoutlined (a logo, a panel)
 uniform vec3 uMouse;      // pointer x, y (px) and presence 0..1
 uniform vec3 uInk;        // star colour
 uniform vec3 uCool;       // the cooler star colour
+uniform vec3 uWarm;       // the warmer star colour
 uniform vec3 uGround;     // page colour
 
 float hash(vec2 p) { p = fract(p * vec2(123.34, 456.21)); p += dot(p, p + 45.32); return fract(p.x * p.y); }
 vec2 hash2(vec2 p) { float n = hash(p); return vec2(n, hash(p + n + 17.0)); }
+
+// Smooth value noise, for clusters and dust: the sky is never an even grid.
+float vnoise(vec2 p) {
+  vec2 i = floor(p);
+  vec2 f = fract(p);
+  f = f * f * (3.0 - 2.0 * f);
+  return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), f.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), f.x), f.y);
+}
 
 // One star per cell: brightness at point u (in px units of the cell grid).
 // \`tdir\` and \`stretch\` draw it longer along one direction: a lensed star is a short arc.
@@ -46,8 +56,10 @@ vec4 star(vec2 u, vec2 cell, float density, float size, vec2 tdir, float stretch
   vec2 id = floor(u / cell);
   vec2 f = fract(u / cell) * cell;
   vec2 h = hash2(id);
-  float on = step(1.0 - density, hash(id + 3.1));
-  vec2 pos = (0.2 + 0.6 * h) * cell;
+  // Clusters: density rises and falls over hundreds of pixels.
+  float cluster = 0.45 + 1.1 * vnoise(id * cell / 520.0 + 7.3);
+  float on = step(1.0 - density * cluster, hash(id + 3.1));
+  vec2 pos = (0.06 + 0.88 * h) * cell;
   float r = size * (0.45 + 0.9 * h.x * h.x);
   vec2 off = f - pos;
   float along = dot(off, tdir) / stretch;
@@ -56,8 +68,10 @@ vec4 star(vec2 u, vec2 cell, float density, float size, vec2 tdir, float stretch
   float core = exp(-(along * along + across * across) / (r * r));
   float halo = exp(-dd / (r * 3.5)) * 0.22 * step(0.85, h.y); // only the brightest stars bloom
   float b = on * (0.35 + 0.65 * h.y) * (core + halo);
-  float cool = step(0.72, hash(id + 9.7));
-  return vec4(b, cool, h);
+  // Colour temperature: 0 neutral, 1 cool, 2 warm.
+  float k = hash(id + 9.7);
+  float temp = k > 0.8 ? 2.0 : (k > 0.55 ? 1.0 : 0.0);
+  return vec4(b, temp, h);
 }
 
 float sdRoundBox(vec2 p, vec2 b, float r) {
@@ -103,16 +117,19 @@ void main() {
     float depth = float(i) + 1.0;
     vec2 u = src - parallax * 0.03 * depth + vec2(2.5 * depth, 0.8 * depth) * uDrift;
     vec4 s = star(u, vec2(30.0 + 26.0 * depth), 0.55, 0.65 + 0.4 * depth, tdir, stretch);
-    float tw = 0.7 + 0.3 * sin(uTime * (0.6 + s.z * 2.0) + s.w * 6.2831);
-    float b = s.x * tw * (0.7 + 0.3 * depth);
+    float tw = 0.82 + 0.18 * sin(uTime * (0.4 + s.z * 1.4) + s.w * 6.2831);   // a gentle twinkle
+    float b = s.x * tw * (0.55 + 0.3 * depth);
     bright += b;
-    tint += b * mix(uInk, uCool, s.y);
+    tint += b * (s.y > 1.5 ? uWarm : (s.y > 0.5 ? uCool : uInk));
   }
   // Lensing concentrates light: squeezed, stretched stars near an edge shine brighter.
   tint *= 1.0 + min(boxPull + mousePull, 1.2) * 1.4;
 
   // A hairline of light on the rim, and a soft falloff just outside it.
-  float rim = d > 0.0 ? exp(-d / 1.4) * (0.35 + 0.4 * uFocus) * uGlow : 0.0;
+  float rim = d > 0.0 ? exp(-d / 1.4) * (0.35 + 0.4 * uFocus) * uGlow * uRim : 0.0;
+  // Faint dust: large, slow, uneven light, so black is never flat.
+  float dust = vnoise(src / 380.0 + uDrift * 0.01) * vnoise(src / 160.0 - 3.0);
+  col += uCool * dust * 0.035;
   col += tint + uInk * rim;
   gl_FragColor = vec4(col, 1.0);
 }
@@ -163,10 +180,11 @@ export function startCosmos(canvas, getTarget) {
   const U = (n) => gl.getUniformLocation(program, n);
   const u = {
     res: U('uRes'), dpr: U('uDpr'), time: U('uTime'), box: U('uBox'), radius: U('uRadius'),
-    lens: U('uLens'), core: U('uCore'), drift: U('uDrift'), glow: U('uGlow'), focus: U('uFocus'), mouse: U('uMouse'), ink: U('uInk'), cool: U('uCool'), ground: U('uGround'),
+    lens: U('uLens'), core: U('uCore'), drift: U('uDrift'), glow: U('uGlow'), rim: U('uRim'), focus: U('uFocus'), mouse: U('uMouse'), ink: U('uInk'), cool: U('uCool'), warm: U('uWarm'), ground: U('uGround'),
   };
   gl.uniform3fv(u.ink, tokenRgb('--color-star', 'white'));
   gl.uniform3fv(u.cool, tokenRgb('--color-star-cool', 'lightblue'));
+  gl.uniform3fv(u.warm, tokenRgb('--color-star-warm', 'wheat'));
   gl.uniform3fv(u.ground, tokenRgb('--color-paper', 'black'));
 
   const still = matchMedia('(prefers-reduced-motion: reduce)');
@@ -213,6 +231,7 @@ export function startCosmos(canvas, getTarget) {
     gl.uniform1f(u.drift, drift);
     gl.uniform1f(u.glow, target.glow);
     gl.uniform1f(u.focus, target.focus);
+    gl.uniform1f(u.rim, target.rim ?? 1);
     gl.uniform3f(u.mouse, mouse.x, mouse.y, still.matches ? 0 : mouse.on);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     if (!still.matches) raf = requestAnimationFrame(frame);
