@@ -57,7 +57,7 @@ async function memoryFor(c: Context): Promise<{ store: MemoryStore; recaller: Re
 
 const app = new Hono();
 
-// The GitHub Pages copy of the UI calls this API from another origin.
+// A page on another origin may call this API (CORS_ORIGINS controls which).
 app.use('/api/*', cors({ origin: config.corsOrigins.includes('*') ? '*' : config.corsOrigins, allowHeaders: ['content-type', 'x-hindsight-user'], maxAge: 600 }));
 
 app.get('/api/status', async (c) => {

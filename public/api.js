@@ -2,7 +2,7 @@
  * The UI talks to an Api, never to fetch directly.
  *
  * LiveApi streams from the Node server. ReplayApi plays back recorded event
- * streams from static files, which is how the GitHub Pages demo runs the real
+ * streams from static files, which lets the same UI run a recorded session with no
  * UI with no server and no keys. Both yield the same events, so the UI code
  * cannot tell them apart.
  */

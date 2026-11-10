@@ -134,7 +134,7 @@ export const config = {
   redis: resolveRedis(),
   /** Running on a host with no writable disk (Vercel sets VERCEL=1). */
   hosted: !!env('VERCEL'),
-  /** Origins allowed to call the API from a browser, e.g. the GitHub Pages site. */
+  /** Origins allowed to call the API from a browser, e.g. a site embedding the agent. */
   corsOrigins: list(env('CORS_ORIGINS') ?? '*'),
 };
 
