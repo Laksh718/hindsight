@@ -68,3 +68,12 @@ test('Gemini-style whole tool calls keep provider fields (thought signatures)', 
   assert.deepEqual(calls.calls[0]!.extra_content, { google: { thought_signature: 'sig==' } });
   assert.equal(calls.calls[1]!.function.arguments, '{"queries":["b"]}');
 });
+
+test('a stream that goes silent is cut off instead of hanging', async () => {
+  const silent = new ReadableStream<Uint8Array>({ start() {} }); // never sends a byte
+  let cut = false;
+  await assert.rejects(async () => {
+    for await (const _ of parseChatStream(silent, { idleMs: 30, onIdle: () => (cut = true) })) void _;
+  }, /stopped responding/);
+  assert.ok(cut);
+});

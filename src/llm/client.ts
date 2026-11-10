@@ -73,12 +73,15 @@ function friendlyError(status: number, body: string, cfg: LlmConfig): LlmError {
  * that failed for a minute, so later turns skip it instead of paying for it.
  */
 const BENCH_MS = 60_000;
+/** Free-tier endpoints sometimes accept a request and never answer. Without these, Node waits 300 s. */
+const HEADERS_TIMEOUT_MS = 25_000;
+const STREAM_IDLE_MS = 30_000;
 const benched = new Map<string, number>();
 
 export class LlmClient {
   constructor(readonly cfg: LlmConfig) {}
 
-  private async post(opts: RequestOptions, stream: boolean): Promise<Response> {
+  private async post(opts: RequestOptions, stream: boolean): Promise<{ res: Response; abort: () => void }> {
     const body: Record<string, unknown> = { messages: opts.messages, stream };
     if (opts.tools?.length) {
       body.tools = opts.tools;
@@ -97,16 +100,32 @@ export class LlmClient {
     let last: LlmError | undefined;
     for (const model of order) {
       const started = Date.now();
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json', authorization: `Bearer ${this.cfg.apiKey}` },
-        body: JSON.stringify({ ...body, model }),
-        signal: opts.signal,
-      });
+      // Our own controller: the caller's abort, a headers timeout, and (for streams) an idle timeout all end it.
+      const ctrl = new AbortController();
+      const onAbort = () => ctrl.abort();
+      opts.signal?.addEventListener('abort', onAbort, { once: true });
+      const timer = setTimeout(() => ctrl.abort(), HEADERS_TIMEOUT_MS);
+      let res: Response;
+      try {
+        res = await fetch(url, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json', authorization: `Bearer ${this.cfg.apiKey}` },
+          body: JSON.stringify({ ...body, model }),
+          signal: ctrl.signal,
+        });
+      } catch (err) {
+        clearTimeout(timer);
+        if (opts.signal?.aborted) throw err;
+        last = new LlmError(`${this.cfg.label} did not respond in time.`, 504, true);
+        console.log(`[llm] ${model} no response in ${Date.now() - started} ms, trying the next model`);
+        benched.set(model, Date.now() + BENCH_MS);
+        continue;
+      }
+      clearTimeout(timer);
       if (res.ok) {
         this.lastModel = model;
         console.log(`[llm] ${model} ${stream ? 'stream' : 'complete'} ${res.status} in ${Date.now() - started} ms`);
-        return res;
+        return { res, abort: () => ctrl.abort() };
       }
       last = friendlyError(res.status, await res.text(), this.cfg);
       console.log(`[llm] ${model} ${res.status} in ${Date.now() - started} ms${last.retryable ? ', trying the next model' : ''}`);
@@ -121,19 +140,19 @@ export class LlmClient {
 
   /** Stream a reply: text deltas as they arrive, tool calls once complete. */
   async *stream(opts: RequestOptions): AsyncGenerator<StreamEvent> {
-    const res = await this.post(opts, true);
+    const { res, abort } = await this.post(opts, true);
     if (!res.body) throw new LlmError('Empty response from model');
-    yield* parseChatStream(res.body);
+    yield* parseChatStream(res.body, { idleMs: STREAM_IDLE_MS, onIdle: abort });
   }
 
   /** One-shot completion, for background work like claim extraction. */
   async complete(opts: RequestOptions): Promise<string> {
     let res: Response;
     try {
-      res = await this.post(opts, false);
+      res = (await this.post(opts, false)).res;
     } catch (err) {
       // Not every provider supports JSON mode; the prompt asks for JSON anyway.
-      if (opts.json && err instanceof LlmError && err.status === 400) res = await this.post({ ...opts, json: false }, false);
+      if (opts.json && err instanceof LlmError && err.status === 400) res = (await this.post({ ...opts, json: false }, false)).res;
       else throw err;
     }
     const data = (await res.json()) as { choices?: Array<{ message?: { content?: string } }> };
@@ -146,7 +165,10 @@ export class LlmClient {
  * calls arrive in fragments (name first, arguments in pieces) and are
  * yielded once, assembled, when the stream ends.
  */
-export async function* parseChatStream(body: ReadableStream<Uint8Array>): AsyncGenerator<StreamEvent> {
+export async function* parseChatStream(
+  body: ReadableStream<Uint8Array>,
+  idle?: { idleMs: number; onIdle: () => void },
+): AsyncGenerator<StreamEvent> {
   const calls: ToolCall[] = [];
   let finish: string | null = null;
   let buffer = '';
@@ -172,7 +194,18 @@ export async function* parseChatStream(body: ReadableStream<Uint8Array>): AsyncG
   const reader = body.getReader();
   try {
     while (true) {
-      const { value, done } = await reader.read();
+      let stall: ReturnType<typeof setTimeout> | undefined;
+      const { value, done } = await (idle
+        ? Promise.race([
+            reader.read(),
+            new Promise<never>((_, reject) => {
+              stall = setTimeout(() => {
+                idle.onIdle();
+                reject(new LlmError('The model stopped responding mid-answer.', 504, true));
+              }, idle.idleMs);
+            }),
+          ]).finally(() => clearTimeout(stall))
+        : reader.read());
       buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
       const lines = buffer.split(/\r?\n/);
       buffer = done ? '' : (lines.pop() ?? '');
