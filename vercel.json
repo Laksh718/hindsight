@@ -2,6 +2,9 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "hono",
   "cleanUrls": true,
+  "rewrites": [
+    { "source": "/", "destination": "/index" }
+  ],
   "redirects": [
     { "source": "/home", "destination": "/", "permanent": true },
     { "source": "/index", "destination": "/", "permanent": true }
