@@ -14,6 +14,9 @@
  *   Vercel + Redis one memory per visitor (an anonymous id the browser keeps)
  *   Vercel alone   per visitor, but only while the function instance lives
  */
+import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 import { Hono, type Context } from 'hono';
 import { cors } from 'hono/cors';
 import { stream } from 'hono/streaming';
@@ -132,6 +135,30 @@ app.post('/api/chat', async (c) => {
     await store.flush(); // a serverless function may freeze once the response ends
   });
 });
+
+const pageCache = new Map<string, string>();
+async function servePage(c: Context, filename: string) {
+  if (!pageCache.has(filename)) {
+    const candidates = [
+      path.join(process.cwd(), 'public', filename),
+      fileURLToPath(new URL(`../public/${filename}`, import.meta.url)),
+    ];
+    for (const candidate of candidates) {
+      try {
+        pageCache.set(filename, await readFile(candidate, 'utf8'));
+        break;
+      } catch {}
+    }
+  }
+  const html = pageCache.get(filename);
+  return html ? c.html(html) : c.notFound();
+}
+
+// On Vercel, framework: hono routes the root path to this function rather than
+// falling back to CDN directory indexing. Serve the static HTML directly.
+app.get('/', (c) => servePage(c, 'index.html'));
+app.get('/chat', (c) => servePage(c, 'chat.html'));
+app.get('/how', (c) => servePage(c, 'how.html'));
 
 app.get('/api/health', (c) => c.json({ ok: true, app: 'hindsight', time: new Date().toISOString() }));
 app.notFound((c) =>
