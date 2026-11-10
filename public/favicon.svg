@@ -1,10 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <!-- Rounded dark background matching brand: #0d0e12 ~ oklch(6.5% 0.004 275) -->
-  <rect width="32" height="32" rx="6" fill="#0d0e12"/>
-  <!-- "h" glyph: left full-height stem -->
-  <rect x="5" y="6" width="4" height="21" rx="2" fill="#f4f5f7"/>
-  <!-- "h" glyph: arch top — rounded bump -->
-  <path d="M9 14 C9 10 11 8.5 14 8.5 C17 8.5 19 10 19 13.5 L19 27" fill="none" stroke="#f4f5f7" stroke-width="4" stroke-linecap="round"/>
-  <!-- Signal dot: coral/red, bottom-right -->
-  <circle cx="26.5" cy="25" r="3.5" fill="#e05535"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <rect width="100" height="100" rx="22" fill="#0b0c10"/>
+  <rect width="98" height="98" x="1" y="1" rx="21" fill="none" stroke="#252932" stroke-width="2"/>
+  <text x="50" y="56" text-anchor="middle" font-family="'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif" font-weight="600" font-size="16.5" letter-spacing="-0.04em" fill="#f7f8fa">hindsight<tspan fill="#e05535">.</tspan></text>
 </svg>
