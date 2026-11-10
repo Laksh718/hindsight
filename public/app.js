@@ -355,8 +355,9 @@ async function ask(text) {
           for (const w of ev.windows) {
             trailItem(turn, w.alternative ? 'Or' : 'Dated', `<q>${esc(w.phrase)}</q> as ${esc(w.label)}`);
           }
+          const verbs = { 'near-date': 'Nearest', related: 'Related' };
           for (const h of ev.hits) {
-            trailItem(turn, 'Recalled', `<a href="#/c/${esc(h.id)}">${esc(h.title)}</a>, ${esc(h.days.join(', '))}`);
+            trailItem(turn, verbs[h.why] ?? 'Recalled', `<a href="#/c/${esc(h.id)}">${esc(h.title)}</a>, ${esc(h.days.join(', '))}`);
           }
           for (const e of ev.empty) trailItem(turn, 'Memory', `nothing on ${esc(e)}`);
           break;
