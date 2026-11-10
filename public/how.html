@@ -30,16 +30,16 @@
   <main id="main">
     <section class="how-hero wrap" aria-label="Replay of a recorded turn">
       <h1>Watch it think</h1>
-      <p>A recorded turn, replayed through its parts at the pace it happened.</p>
+      <p>A real recorded turn, replayed through its parts.</p>
       <div class="stage" data-lens data-lens-strength="900" data-lens-radius="14">
+        <div class="picks" id="picks" role="radiogroup" aria-label="Choose a recorded question"></div>
         <div class="stage__top">
-          <label class="visually-hidden" for="replay-pick">Recorded question</label>
-          <select id="replay-pick" class="pick"></select>
           <div class="transport">
             <button class="pill pill--primary" type="button" id="play" aria-pressed="false">Play</button>
-            <button class="pill" type="button" id="speed" aria-label="Playback speed">1×</button>
+            <button class="pill" type="button" id="speed" aria-label="Playback speed, 1 times">1×</button>
             <label class="toggle"><input type="checkbox" id="realtime"> Real time</label>
           </div>
+          <p class="stage__note" id="note" aria-live="polite"></p>
         </div>
 
         <div class="stage__body">
@@ -77,8 +77,7 @@
           </div>
         </div>
 
-        <div class="scrub" id="scrub"><div class="scrub__fill" id="scrub-fill"></div></div>
-        <p class="stage__note" id="note"></p>
+        <div class="scrub" id="scrub" role="slider" tabindex="0" aria-label="Replay position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="scrub__fill" id="scrub-fill"></div></div>
       </div>
     </section>
 
@@ -118,7 +117,7 @@
 
   <footer class="site-foot">
     <div class="wrap">
-      <span>hindsight<span class="logo__dot">.</span> One tool, web search. A dated memory.</span>
+      <span>hindsight<span class="logo__dot">.</span> Built by <a href="https://laksh.codes" target="_blank" rel="noopener">Laksh</a>.</span>
       <nav aria-label="More">
         <a href="https://github.com/Laksh718/hindsight/blob/main/DESIGN.md">Design</a>
         <a href="https://github.com/Laksh718/hindsight/blob/main/ARCHITECTURE.md">Architecture notes</a>

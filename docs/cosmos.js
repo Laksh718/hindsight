@@ -33,6 +33,9 @@ uniform float uDrift;     // accumulated drift time: advances faster while the a
 uniform float uGlow;      // lens and rim strength: full on welcome, softer in a chat
 uniform float uFocus;     // rim boost when the composer has focus
 uniform float uRim;       // 1 draws the rim (the composer); 0 leaves the mass unoutlined (a logo, a panel)
+uniform float uFall;      // accumulated infall: how far the sky has fallen toward the mass
+uniform float uWarp;      // 0 calm, 1 the agent is working: faster fall, radial streaks
+uniform float uDim;       // overall brightness: full on the welcome, low behind a conversation
 uniform vec3 uMouse;      // pointer x, y (px) and presence 0..1
 uniform vec3 uInk;        // star colour
 uniform vec3 uCool;       // the cooler star colour
@@ -72,6 +75,61 @@ vec4 star(vec2 u, vec2 cell, float density, float size, vec2 tdir, float stretch
   float k = hash(id + 9.7);
   float temp = k > 0.8 ? 2.0 : (k > 0.55 ? 1.0 : 0.0);
   return vec4(b, temp, h);
+}
+
+const float PI = 3.14159265;
+
+// Arc-length position along the rounded rectangle's outline, clockwise from its top-left.
+float outline(vec2 p, vec2 hb, float r) {
+  float a = hb.x - r, b = hb.y - r;
+  vec2 c = clamp(p, vec2(-a, -b), vec2(a, b));
+  vec2 v = p - c;
+  float th = atan(v.y, v.x);
+  float q = PI * 0.5 * r;
+  if (v.y > 0.0 && abs(v.x) < 0.001) return p.x + a;
+  if (v.x > 0.0 && abs(v.y) < 0.001) return 2.0 * a + q + (b - p.y);
+  if (v.y < 0.0 && abs(v.x) < 0.001) return 2.0 * a + 2.0 * q + 2.0 * b + (a - p.x);
+  if (v.x < 0.0 && abs(v.y) < 0.001) return 4.0 * a + 3.0 * q + 2.0 * b + (p.y + b);
+  if (v.x >= 0.0 && v.y >= 0.0) return 2.0 * a + r * (PI * 0.5 - th);
+  if (v.x >= 0.0) return 2.0 * a + q + 2.0 * b + r * (-th);
+  if (v.y < 0.0) return 4.0 * a + 2.0 * q + 2.0 * b + r * (-PI * 0.5 - th);
+  return 4.0 * a + 3.0 * q + 4.0 * b + r * (PI - th);
+}
+
+// The infall: stars on a grid in log-polar coordinates around the mass, falling inward.
+// x is the position around the outline (0..1), y is log(distance): equal steps in y are
+// equal ratios of distance, so stars are large and fast near the screen's edge and tiny
+// and dense near the horizon. Moving the grid in y over time makes everything fall in.
+vec3 infall(vec2 rel, float d, vec2 hb, float r, vec3 ink, vec3 cool, vec3 warm) {
+  float period = 4.0 * (hb.x - r) + 4.0 * (hb.y - r) + 2.0 * PI * r;
+  const float AROUND = 150.0;   // cells around the mass
+  const float PER_E = 7.0;      // cells per e-fold of distance
+  const float K = 16.0;         // softening at the horizon, px
+  float L = log(d + K);
+  float around = outline(rel, hb, r) / period;
+  // A slow spiral: inner stars lag a little in angle as they fall.
+  float twist = uFall * 0.004 + 0.18 / L;
+  vec2 g = vec2(fract(around + twist) * AROUND, (L + uFall * 0.32) * PER_E);
+  vec3 total = vec3(0.0);
+  for (int j = 0; j < 2; j++) {                     // this row and the next: streaks cross rows
+    vec2 id = vec2(floor(g.x), floor(g.y) + float(j));
+    vec2 h = hash2(vec2(mod(id.x, AROUND), id.y));
+    if (hash(id + 2.7) < 0.62) continue;
+    vec2 pos = vec2(0.1 + 0.8 * h.x, 0.1 + 0.8 * h.y);
+    vec2 off = vec2(g.x - id.x - pos.x, g.y - id.y - pos.y);
+    // Grid units to pixels at this distance.
+    float cellAround = (period + 2.0 * PI * d) / AROUND;
+    float cellOut = (d + K) / PER_E;
+    float streak = 1.0 + uWarp * 5.0;               // faster fall, longer radial streaks
+    vec2 px = vec2(off.x * cellAround, off.y * cellOut / streak);
+    float size = mix(0.55, 1.9, smoothstep(0.0, 900.0, d)) * (0.6 + 0.8 * h.x);
+    float b = exp(-dot(px, px) / (size * size)) * (0.35 + 0.65 * h.y);
+    float k = hash(id + 9.7);
+    total += b * (k > 0.82 ? warm : (k > 0.55 ? cool : ink));
+  }
+  // Fade in from far away, burn out at the horizon.
+  float fade = smoothstep(log(K) + 0.25, log(K) + 1.4, L) * (1.0 - smoothstep(log(1500.0), log(2600.0), L));
+  return total * fade;
 }
 
 float sdRoundBox(vec2 p, vec2 b, float r) {
@@ -127,6 +185,10 @@ void main() {
 
   // A hairline of light on the rim, and a soft falloff just outside it.
   float rim = d > 0.0 ? exp(-d / 1.4) * (0.35 + 0.4 * uFocus) * uGlow * uRim : 0.0;
+  // The fall: a second sky, pouring into the mass.
+  if (d > 0.0) tint += infall(rel, d, uBox.zw, uRadius, uInk, uCool, uWarm) * uGlow * (0.75 + 0.5 * uWarp);
+  tint *= uDim;
+
   // Faint dust: large, slow, uneven light, so black is never flat.
   float dust = vnoise(src / 380.0 + uDrift * 0.01) * vnoise(src / 160.0 - 3.0);
   col += uCool * dust * 0.035;
@@ -180,7 +242,7 @@ export function startCosmos(canvas, getTarget) {
   const U = (n) => gl.getUniformLocation(program, n);
   const u = {
     res: U('uRes'), dpr: U('uDpr'), time: U('uTime'), box: U('uBox'), radius: U('uRadius'),
-    lens: U('uLens'), core: U('uCore'), drift: U('uDrift'), glow: U('uGlow'), rim: U('uRim'), focus: U('uFocus'), mouse: U('uMouse'), ink: U('uInk'), cool: U('uCool'), warm: U('uWarm'), ground: U('uGround'),
+    lens: U('uLens'), core: U('uCore'), drift: U('uDrift'), glow: U('uGlow'), rim: U('uRim'), fall: U('uFall'), warp: U('uWarp'), dim: U('uDim'), focus: U('uFocus'), mouse: U('uMouse'), ink: U('uInk'), cool: U('uCool'), warm: U('uWarm'), ground: U('uGround'),
   };
   gl.uniform3fv(u.ink, tokenRgb('--color-star', 'white'));
   gl.uniform3fv(u.cool, tokenRgb('--color-star-cool', 'lightblue'));
@@ -209,12 +271,14 @@ export function startCosmos(canvas, getTarget) {
   let last = performance.now();
   let time = 0;
   let drift = 0;
+  let fall = 0;
   function frame(now) {
     const dt = Math.min((now - last) / 1000, 0.05);
     last = now;
     const target = getTarget();
     time += dt;
     drift += dt * target.energy; // integrated, so a change of speed never makes the sky jump
+    fall += dt * (0.35 + 2.4 * (target.warp ?? 0)) * (still.matches ? 0 : 1);
     const ease = 1 - Math.exp(-dt * 6);
     mouse.x += (mouse.tx - mouse.x) * ease;
     mouse.y += (mouse.ty - mouse.y) * ease;
@@ -232,6 +296,9 @@ export function startCosmos(canvas, getTarget) {
     gl.uniform1f(u.glow, target.glow);
     gl.uniform1f(u.focus, target.focus);
     gl.uniform1f(u.rim, target.rim ?? 1);
+    gl.uniform1f(u.fall, fall);
+    gl.uniform1f(u.warp, target.warp ?? 0);
+    gl.uniform1f(u.dim, target.dim ?? 1);
     gl.uniform3f(u.mouse, mouse.x, mouse.y, still.matches ? 0 : mouse.on);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     if (!still.matches) raf = requestAnimationFrame(frame);

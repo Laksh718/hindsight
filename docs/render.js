@@ -59,7 +59,9 @@ function linkCitations(root, sources) {
     let last = 0;
     const text = node.nodeValue;
     for (const m of text.matchAll(/\[(\d+(?:\s*,\s*\d+)*)\]/g)) {
-      frag.append(text.slice(last, m.index));
+      const known = m[1].split(',').some((x) => sources.has(Number(x.trim())));
+      // A citation with no source is dropped, and so is the space that led up to it.
+      frag.append(known ? text.slice(last, m.index) : text.slice(last, m.index).replace(/\s+$/, ''));
       for (const n of m[1].split(',').map((x) => Number(x.trim()))) {
         const s = sources.get(n);
         const sup = document.createElement('sup');

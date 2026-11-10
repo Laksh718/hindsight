@@ -2,6 +2,7 @@
  * nav: a quiet top line (the hindsight. logo, model, memory, how it works, new) with memory in a drawer · signature: the vortex, stars orbiting the composer and following it from the centre of the welcome screen to its dock; under each answer the live pipeline (recall, search, answer, remember) · states: setup, loading, empty, error, streaming, full, replay
  * axes: dark/grotesk-sans/neutral · posture: restrained · contrast: pass · v2.0.0 */
 /* Hallmark · pre-emit critique: P5 H5 E4 S4 R4 V5 · weakest: S, a starfield could front any AI tool, so the welcome head and the pipeline under each answer carry what only Hindsight does: dates, recall, rechecks */
+/* Hallmark · dismissed F7 · the pill radius sits on controls only: the skip link, ghost buttons, starter buttons and citation links */
 @import url("./tokens.css");
 @import url("./base.css");
 
@@ -135,6 +136,9 @@ a:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; bo
 .hero code, .prose code { font: 400 0.85em/1.4 var(--font-outlier); padding: var(--space-3xs) var(--space-2xs); border-radius: 5px; background: var(--color-paper-3); color: var(--color-ink); }
 .hero .problem { color: var(--color-signal); font-size: var(--text-sm); }
 
+/* Reading column: behind a conversation the sky steps back, so text reads first. */
+[data-view="chat"] .main::before { content: ""; position: fixed; top: 0; bottom: 0; left: 50%; z-index: -1; width: min(62rem, 100%); transform: translateX(-50%); background: linear-gradient(90deg, transparent, var(--color-veil) 12%, var(--color-veil) 88%, transparent); pointer-events: none; }
+
 /* The thread */
 .thread { display: none; }
 [data-view="chat"] .thread { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: var(--space-3xl); width: 100%; max-width: var(--measure); margin-inline: auto; padding: var(--space-xl) 0 var(--space-2xl); }
@@ -201,7 +205,8 @@ a:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; bo
 .trail__meta { display: none; }
 
 /* The answer */
-.prose { color: var(--color-ink-2); font-size: var(--text-md); line-height: 1.65; }
+.prose { color: var(--color-ink-2); font-size: 1.0625rem; line-height: 1.7; }
+.prose p, .prose li { color: color-mix(in oklch, var(--color-ink) 70%, var(--color-ink-2)); }
 .prose > * + * { margin-top: var(--space-sm); }
 .prose p { max-width: 68ch; }
 .prose ul, .prose ol { padding-left: var(--space-lg); }
@@ -268,6 +273,22 @@ a:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; bo
 .js .chip { animation: rise 420ms var(--ease-out) both; }
 .js .chip:nth-child(2) { animation-delay: 40ms; } .js .chip:nth-child(3) { animation-delay: 80ms; } .js .chip:nth-child(4) { animation-delay: 120ms; } .js .chip:nth-child(n+5) { animation-delay: 160ms; }
 .js .turn.is-settled .answer tbody tr { animation: rise 420ms var(--ease-out) both; animation-delay: calc(var(--r, 0) * 45ms); }
+
+
+/* Recheck: the jump back in time. */
+.ledger__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-sm); margin-bottom: var(--space-xs); }
+.ledger__head .ledger__note { margin: 0; }
+.pill--small { min-height: 32px; padding: 0 var(--space-md); font-size: var(--text-xs); }
+.recheck { background: var(--color-ink); color: var(--color-accent-ink); box-shadow: none; }
+.recheck:hover { background: var(--color-ink-2); }
+.conv-row { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-2xs); }
+.conv__recheck { position: relative; min-height: 28px; padding: 0 var(--space-sm); border: 0; border-radius: var(--radius-pill); background: transparent; box-shadow: inset 0 0 0 var(--rule-hair) var(--color-rule-2); color: var(--color-ink-2); font: 400 var(--text-xs)/1 var(--font-body); cursor: pointer; opacity: 0.7; transition: opacity var(--dur-short) var(--ease-out), background-color var(--dur-short) var(--ease-out); }
+.conv__recheck::before { content: ""; position: absolute; inset: -8px -4px; }
+.conv-row:hover .conv__recheck, .conv__recheck:focus-visible { opacity: 1; }
+.conv__recheck:hover { background: var(--color-paper-3); color: var(--color-ink); }
+.conv__recheck:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; }
+.conv__recheck:active { transform: translateY(1px); }
+.memory__credit { margin-top: var(--space-xl); padding-top: var(--space-md); border-top: var(--rule-hair) solid var(--color-rule); font-size: var(--text-xs); color: var(--color-muted); }
 
 /* Motion: arrivals only, and only when scripting runs (content is visible without it). */
 @keyframes rise { from { opacity: 0; transform: translateY(14px); } }

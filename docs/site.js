@@ -16,6 +16,8 @@ if (mass) {
     energy: 1,
     focus: 0,
     rim: 0,
+    warp: 0,
+    dim: 1,
   }));
 }
 

@@ -156,6 +156,15 @@ function apply({ t, e }, quiet = false) {
   }
 }
 
+/** A short tag for each recorded question, from what it exercises. */
+function tagFor(r) {
+  const m = r.message.toLowerCase();
+  if (/still correct|still true|changed/.test(m) && /monday|since/.test(m)) return 'Changes since Monday';
+  if (/still correct|still true/.test(m)) return 'Recheck a past answer';
+  if (/what did i ask/.test(m)) return 'A day with nothing';
+  return 'Recorded question';
+}
+
 /** Display times: the real ones, or with quiet gaps shortened. */
 function buildTimeline() {
   const real = $('#realtime').checked;
@@ -172,8 +181,8 @@ function buildTimeline() {
   });
   const total = state.timeline.at(-1)?.at ?? 0;
   $('#note').textContent = real
-    ? `Real time: ${secs(state.replay.events.at(-1).t)} from question to the last claim saved.`
-    : `Quiet gaps shortened: ${secs(shortened)} of waiting skipped. Turn on Real time to sit through them. Timestamps in the log are the real ones.`;
+    ? `Real time: ${secs(state.replay.events.at(-1).t)}, question to ledger.`
+    : `${secs(shortened)} of waiting skipped. Log times are real.`;
   return total;
 }
 
@@ -202,6 +211,7 @@ function frame(now) {
     $('#clock-t').textContent = secs(Math.max(0, real));
     const total = state.timeline.at(-1)?.at ?? 1;
     $('#scrub-fill').style.transform = `scaleX(${Math.min(state.playhead / total, 1)})`;
+    $('#scrub').setAttribute('aria-valuenow', String(Math.round(Math.min(state.playhead / total, 1) * 100)));
     if (state.i >= state.timeline.length) {
       state.playing = false;
       $('#play').textContent = 'Play again';
@@ -252,16 +262,38 @@ async function boot() {
     return;
   }
   $('#model-id').textContent = state.session.model?.model ?? 'turn.ts';
-  $('#replay-pick').innerHTML = state.session.replays.map((r, i) => `<option value="${i}">${esc(r.message)}</option>`).join('');
-  choose(0);
-
-  $('#replay-pick').addEventListener('change', (e) => {
+  // The question picker: a radio group of cards, arrow keys move between them.
+  const picks = $('#picks');
+  picks.innerHTML = state.session.replays
+    .map((r, i) => `<button class="pickq" type="button" role="radio" aria-checked="${i === 0}" tabindex="${i === 0 ? 0 : -1}" data-i="${i}"><span class="pickq__tag">${esc(tagFor(r))}</span><span class="pickq__q">${esc(r.message)}</span></button>`)
+    .join('');
+  const select = (i, focus) => {
+    picks.querySelectorAll('.pickq').forEach((b, k) => {
+      b.setAttribute('aria-checked', String(k === i));
+      b.tabIndex = k === i ? 0 : -1;
+      if (k === i && focus) b.focus();
+    });
+    state.picked = i;
     state.playing = false;
     $('#play').textContent = 'Play';
-    choose(Number(e.target.value));
+    $('#play').setAttribute('aria-pressed', 'false');
+    choose(i);
+  };
+  picks.addEventListener('click', (e) => {
+    const b = e.target.closest('.pickq');
+    if (b) select(Number(b.dataset.i));
   });
+  picks.addEventListener('keydown', (e) => {
+    const n = state.session.replays.length;
+    const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+    if (!step) return;
+    e.preventDefault();
+    select(((state.picked ?? 0) + step + n) % n, true);
+  });
+  state.picked = 0;
+  choose(0);
   $('#play').addEventListener('click', () => {
-    if (state.i >= state.timeline.length) choose(Number($('#replay-pick').value));
+    if (state.i >= state.timeline.length) choose(state.picked ?? 0);
     state.playing = !state.playing;
     $('#play').textContent = state.playing ? 'Pause' : 'Play';
     $('#play').setAttribute('aria-pressed', String(state.playing));
@@ -269,6 +301,7 @@ async function boot() {
   $('#speed').addEventListener('click', () => {
     state.speed = state.speed === 1 ? 2 : state.speed === 2 ? 4 : 1;
     $('#speed').textContent = `${state.speed}×`;
+    $('#speed').setAttribute('aria-label', `Playback speed, ${state.speed} times`);
   });
   $('#realtime').addEventListener('change', () => {
     const fraction = state.playhead / Math.max(state.timeline.at(-1)?.at ?? 1, 1);
@@ -278,6 +311,13 @@ async function boot() {
   $('#scrub').addEventListener('click', (e) => {
     const r = e.currentTarget.getBoundingClientRect();
     seek(Math.min(Math.max((e.clientX - r.left) / r.width, 0), 1));
+  });
+  $('#scrub').addEventListener('keydown', (e) => {
+    const step = { ArrowRight: 0.05, ArrowLeft: -0.05, Home: -1, End: 1 }[e.key];
+    if (step === undefined) return;
+    e.preventDefault();
+    const total = state.timeline.at(-1)?.at ?? 1;
+    seek(Math.min(Math.max(state.playhead / total + step, 0), 1));
   });
 
   // Start on its own once the stage is on screen: the page's one moving demo.

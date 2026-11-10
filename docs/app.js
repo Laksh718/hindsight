@@ -130,11 +130,11 @@ function paintMemory() {
       const rel = relativeDay(items[0].updatedAt);
       const rows = items
         .map(
-          (c) => `<li><a class="conv" href="#/c/${esc(c.id)}" ${c.id === state.currentId ? 'aria-current="page"' : ''}>
+          (c) => `<li class="conv-row"><a class="conv" href="#/c/${esc(c.id)}" ${c.id === state.currentId ? 'aria-current="page"' : ''}>
             <span class="conv__title">${esc(c.title || 'Untitled')}</span>
             <span class="conv__time">${formatTime(c.updatedAt)}</span>
             ${c.simulated ? '<span class="conv__sim">time-travelled</span>' : ''}
-          </a></li>`,
+          </a>${c.claimCount ? `<button class="conv__recheck" type="button" data-recheck-title="${esc(c.title || '')}" data-recheck-at="${esc(c.createdAt)}" aria-label="Recheck ${esc(c.title || 'this conversation')}">Recheck</button>` : ''}</li>`,
         )
         .join('');
       return `<section class="day"${rel === 'today' ? ' data-today' : ''}><h3><time datetime="${dayKey(items[0].updatedAt)}">${formatDay(items[0].updatedAt)}</time><span>${rel}</span></h3><ul>${rows}</ul></section>`;
@@ -261,6 +261,24 @@ function step(turn, name, stateName, meta) {
 
 const queriesHtml = (queries, since) => `${queries.map((q) => `<q>${esc(q)}</q>`).join(', ')}${since ? `, published since ${esc(since)}` : ''}`;
 
+/** The jump back: re-verify everything said on a past day, in a fresh conversation. */
+function recheckButton(title, asOf) {
+  return `<button class="pill pill--small recheck" type="button" data-recheck-title="${esc(title)}" data-recheck-at="${esc(asOf)}">Recheck now</button>`;
+}
+
+function recheck(title, asOf) {
+  const day = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'long', timeZone: 'UTC' }).format(new Date(`${asOf.slice(0, 10)}T12:00:00Z`));
+  const about = title ? ` about ${title}` : '';
+  const prompt = `On ${day} you told me${about}. Is all of it still correct today? Recheck each claim.`;
+  toggleDrawer(false);
+  state.currentId = null;
+  state.suppressRoute = true;
+  location.hash = '#/';
+  thread().innerHTML = '';
+  state.warpUntil = performance.now() + 2600; // the sky lurches inward: back in time
+  ask(prompt);
+}
+
 function paintFoot(turn, message, claims) {
   const foot = turn.querySelector('.turn__foot');
   foot.innerHTML = '';
@@ -294,7 +312,7 @@ function paintFoot(turn, message, claims) {
   if (claims?.length) {
     foot.append(
       el(`<details class="fold ledger" open><summary>remembered<span class="fold__meta">${claims.length} ${claims.length === 1 ? 'claim' : 'claims'}, as of ${esc(formatDay(claims[0].asOf + 'T12:00:00'))}</span></summary>
-        <div class="fold__body"><p class="ledger__note">Ask later whether these still hold, and I will check each one again.</p>${ledgerTable(claims, domainOf)}</div></details>`),
+        <div class="fold__body"><div class="ledger__head"><p class="ledger__note">Ask later whether these still hold, and I will check each one again.</p>${recheckButton(turn.dataset.title || '', claims[0].asOf)}</div>${ledgerTable(claims, domainOf)}</div></details>`),
     );
   }
 }
@@ -307,6 +325,7 @@ function settle(turn) {
 
 function paintStoredTurn(user, answer, conversation) {
   const turn = turnShell(user);
+  turn.dataset.title = conversation.title || '';
   if (answer) {
     const recalled = answer.recalled ?? [];
     const searches = answer.searches ?? [];
@@ -437,6 +456,7 @@ async function ask(text) {
           break;
         }
         case 'recall': {
+          if (ev.hits.length) state.warpUntil = performance.now() + 1800;
           step(turn, 'recall', ev.hits.length ? 'done' : 'skipped', ev.hits.length ? `${ev.hits.length} past` : ev.windows.length ? 'nothing that day' : 'nothing needed');
           step(turn, 'answer', 'active', 'thinking');
           for (const w of ev.windows) {
@@ -505,6 +525,8 @@ async function ask(text) {
           break;
         }
         case 'remembered': {
+          if (ev.title) turn.dataset.title = ev.title;
+          else if (!turn.dataset.title) turn.dataset.title = state.conversations.find((c) => c.id === state.currentId)?.title ?? '';
           const done = { content: draft, sources: [...sources.values()] };
           if (ev.claims?.length) paintFoot(turn, done, ev.claims);
           step(turn, 'remember', ev.claims?.length ? 'done' : 'skipped', ev.claims?.length ? `${ev.claims.length} claims` : 'nothing to keep');
@@ -560,6 +582,11 @@ function wire() {
   });
 
   document.addEventListener('click', (e) => {
+    const r = e.target.closest('[data-recheck-at]');
+    if (r) {
+      if (!state.busy) recheck(r.dataset.recheckTitle, r.dataset.recheckAt);
+      return;
+    }
     const t = e.target.closest('[data-ask], [data-retry], [data-action]');
     if (!t) return;
     if (t.dataset.ask) ask(t.dataset.ask);
@@ -604,8 +631,13 @@ function cosmosTarget() {
   const composer = $('#composer');
   const welcome = document.body.dataset.view === 'welcome';
   const focused = composer.matches(':focus-within');
+  // A surge when the agent reaches into the past: memory recalled, the sky lurches inward.
+  const surge = (state.warpUntil ?? 0) > performance.now() ? 1 : 0;
   const goal = {
     lens: welcome ? 2200 : 1000,
+    warp: Math.max(state.busy ? 0.7 : 0, surge),
+    // Behind a conversation the sky steps back, so text reads first.
+    dim: welcome ? 1 : 0.42,
     reach: welcome ? 240 : 90,
     glow: welcome ? 1 : 0.55,
     // The flow quickens while the agent works: the sky shows it is thinking.
