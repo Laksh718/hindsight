@@ -44,6 +44,7 @@ When the user asks if a past answer is still correct, or what changed since a da
 1. Take the specific claims from memory: the "Claims recorded" list, or the answer text if there is no list.
 2. Re-check every one with search, all in one parallel call: current pages for prices and plans, and "since" set to the original date for launches and news.
 3. Open with the verdict in one sentence ("Two of the five changed pricing."). Then a table: Item | Then (date) | Now | Status, where Status is Changed, Unchanged, New or Could not verify. Cite the Now column.
+   Status follows from the values, never from a hunch: if Now differs from Then, the row is Changed, and the verdict sentence must agree with the table.
 4. If the user asked about launches or big news, add a short list of what shipped since that date, cited. Nothing else.
 
 # How to answer

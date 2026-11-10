@@ -8,10 +8,12 @@
  */
 import { LiveApi, ReplayApi } from './api.js';
 import { el, esc, renderAnswer, sourcesTable, ledgerTable, citedNumbers } from './render.js';
+import { startCosmos } from './cosmos.js';
 
 const $ = (sel) => document.querySelector(sel);
-const replayBase = document.documentElement.dataset.replay;
-const api = replayBase ? new ReplayApi(replayBase) : new LiveApi();
+// Same UI, three back ends: this server, a hosted API (data-api), or a recording (data-replay).
+const { replay: replayBase, api: apiBase } = document.documentElement.dataset;
+const api = replayBase ? new ReplayApi(replayBase) : new LiveApi(apiBase ?? '');
 const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
 
 const state = {
@@ -86,18 +88,25 @@ const seconds = (ms) => `${(ms / 1000).toFixed(1)} s`;
 /* The bar ---------------------------------------------------------------- */
 function paintClock() {
   const now = clock.now();
-  const button = $('#clock-button');
   const sim = clock.simulated();
-  button.toggleAttribute('data-simulated', sim);
-  $('#clock-label').innerHTML = `${sim ? '<span class="clock__long">Pretending it is </span>' : ''}${dayLabel(now)}<span class="clock__long"> ${now.getFullYear()}${sim ? `, ${formatTime(now)}` : ''}</span>`;
+  $('#clock-button').toggleAttribute('data-simulated', sim);
+  const label = $('#clock-label');
+  label.toggleAttribute('data-simulated', sim);
+  label.textContent = sim ? `Pretending it is ${dayLabel(now)}, ${formatTime(now)}` : dayLabel(now, true);
 }
 
 function paintModel() {
   const s = state.status;
   const line = $('#model-line');
   if (!s) return (line.textContent = '');
-  if (s.replay) return (line.textContent = s.recorded ? 'Recorded demo: replays real answers, no server' : 'Demo');
-  line.textContent = s.model ? `${s.model.provider}, ${s.model.model}, with ${s.search ?? 'no'} search` : 'Not configured yet';
+  const chip = $('#model-chip');
+  if (s.replay) {
+    line.textContent = s.recorded ? 'Recorded demo: real answers, replayed' : 'Demo';
+    chip.textContent = s.model?.model ?? '';
+    return;
+  }
+  line.textContent = s.model ? `${s.model.provider} with ${s.search ?? 'no'} search` : 'Not configured yet';
+  chip.textContent = s.model?.model ?? '';
 }
 
 /* Memory sidebar ----------------------------------------------------------- */
@@ -128,7 +137,7 @@ function paintMemory() {
           </a></li>`,
         )
         .join('');
-      return `<section class="day"><h3><time datetime="${dayKey(items[0].updatedAt)}">${formatDay(items[0].updatedAt)}</time><span>${rel}</span></h3><ul>${rows}</ul></section>`;
+      return `<section class="day"${rel === 'today' ? ' data-today' : ''}><h3><time datetime="${dayKey(items[0].updatedAt)}">${formatDay(items[0].updatedAt)}</time><span>${rel}</span></h3><ul>${rows}</ul></section>`;
     })
     .join('');
 }
@@ -146,7 +155,7 @@ function toggleDrawer(open) {
   const m = $('#memory');
   const next = open ?? !m.hasAttribute('data-open');
   m.toggleAttribute('data-open', next);
-  $('[data-action="toggle-memory"]').setAttribute('aria-expanded', String(next));
+  for (const b of document.querySelectorAll('[data-action="toggle-memory"]')) b.setAttribute('aria-expanded', String(next));
 }
 
 /* The thread -------------------------------------------------------------- */
@@ -169,48 +178,63 @@ async function starters() {
   return [[label, `What did I ask you ${when}? Is your answer still correct today?`], ...base.slice(0, 2)];
 }
 
+/* Views: welcome (composer centred, vortex wide) and chat (composer docked). */
+function setView(view) {
+  const body = document.body;
+  if (body.dataset.view === view) return;
+  const composer = $('#composer');
+  const from = composer.getBoundingClientRect();
+  body.dataset.view = view;
+  // FLIP: the composer glides from where it was to where it now sits; the vortex follows it.
+  const to = composer.getBoundingClientRect();
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches || !from.width) return;
+  composer.animate(
+    [{ transform: `translate(${from.left - to.left}px, ${from.top - to.top}px)` }, { transform: 'none' }],
+    { duration: 620, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' },
+  );
+}
+
 async function paintWelcome() {
   const s = state.status;
+  setView('welcome');
+  thread().innerHTML = '';
+  const hero = $('#hero');
+  const startersEl = $('#starters');
+  startersEl.innerHTML = '';
   if (s && !s.ready) {
-    thread().innerHTML = `<section class="welcome setup">
-      <h1>Two free keys, then ask away</h1>
-      <p class="lead">Hindsight needs a model and a search engine. Both have free tiers, no card needed.</p>
-      <ol>
-        <li>Get a Gemini key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">aistudio.google.com/apikey</a></li>
-        <li>Get a Tavily key at <a href="https://app.tavily.com" target="_blank" rel="noopener noreferrer">app.tavily.com</a></li>
-        <li>Run <code>cp .env.example .env</code>, paste both keys in, and restart <code>npm run dev</code></li>
+    hero.innerHTML = `<h1>Two free keys, then ask away</h1>
+      <p>Hindsight needs a model and a search engine. Both have free tiers, no card needed.</p>
+      <ol class="setup-steps">
+        <li>1. A Gemini key from <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">aistudio.google.com/apikey</a></li>
+        <li>2. A Tavily key from <a href="https://app.tavily.com" target="_blank" rel="noopener noreferrer">app.tavily.com</a></li>
+        <li>3. <code>cp .env.example .env</code>, paste both, restart <code>npm run dev</code></li>
       </ol>
-      ${s.problems.map((p) => `<p class="setup__problem">${esc(p)}</p>`).join('')}
-    </section>`;
+      ${s.problems.map((p) => `<p class="problem">${esc(p)}</p>`).join('')}`;
     setComposer({ disabled: true });
     return;
   }
   if (s?.replay && !s.recorded) {
-    thread().innerHTML = `<section class="welcome setup">
-      <h1>The recorded demo is on its way</h1>
-      <p class="lead">This page replays real Hindsight answers with no server. The first session has not been recorded yet. Meanwhile, run it yourself with two free keys.</p>
-      <ol>
-        <li><code>git clone https://github.com/Laksh718/hindsight</code></li>
-        <li><code>npm install</code>, then <code>cp .env.example .env</code> and add a Gemini and a Tavily key</li>
-        <li><code>npm run dev</code> and open <code>localhost:3000</code></li>
-      </ol>
-      <p>How it works: <a href="https://github.com/Laksh718/hindsight/blob/main/DESIGN.md">DESIGN.md</a></p>
-    </section>`;
+    hero.innerHTML = `<h1>The demo is on its way</h1>
+      <p>This page replays real Hindsight answers with no server; the first session is not recorded yet. Run it yourself with two free keys: <code>npm install</code>, add keys to <code>.env</code>, <code>npm run dev</code>.</p>`;
     setComposer({ disabled: true });
     return;
   }
+  hero.innerHTML = `<h1>It remembers what it told you</h1>
+    <p>Ask anything current. Every answer is searched, cited and dated, so later you can ask whether it still holds.</p>`;
   const list = await starters();
-  thread().innerHTML = `<section class="welcome">
-    <h1>What should I look up?</h1>
-    <p class="lead">I search the web and cite every source. I also keep a dated record of what I told you, so you can ask later whether it still holds.</p>
-    <ul class="starters">${list.map(([label, q]) => `<li><button class="starter" type="button" data-ask="${esc(q)}" title="${esc(q)}">${esc(label)}</button></li>`).join('')}</ul>
-  </section>`;
+  startersEl.innerHTML = list.map(([label, q]) => `<li><button class="starter" type="button" data-ask="${esc(q)}" title="${esc(q)}">${esc(label)}</button></li>`).join('');
   setComposer({ disabled: false });
 }
 
 function turnShell(user) {
   return el(`<article class="turn">
     <header class="turn__q"><time class="turn__time" datetime="${esc(user.at)}" title="${esc(formatDay(user.at))}">${formatTime(user.at)}</time><h2 class="turn__ask">${esc(user.content)}</h2></header>
+    <ol class="pipe" aria-label="What the agent did">
+      <li data-step="recall"><span class="pipe__name">recall</span><span class="pipe__meta"></span></li>
+      <li data-step="search"><span class="pipe__name">search</span><span class="pipe__meta"></span></li>
+      <li data-step="answer"><span class="pipe__name">answer</span><span class="pipe__meta"></span></li>
+      <li data-step="remember"><span class="pipe__name">remember</span><span class="pipe__meta"></span></li>
+    </ol>
     <ol class="trail"></ol>
     <div class="prose answer"></div>
     <div class="turn__foot"></div>
@@ -223,6 +247,18 @@ function trailItem(turn, verb, whatHtml, meta = '', stateName = '') {
   return li;
 }
 
+/** Light one step of the pipeline: idle, active, done, skipped or failed, with a mono readout. */
+function step(turn, name, stateName, meta) {
+  const li = turn.querySelector(`.pipe [data-step="${name}"]`);
+  if (!li) return;
+  li.dataset.state = stateName;
+  if (meta !== undefined) {
+    const m = li.querySelector('.pipe__meta');
+    m.textContent = meta;
+    m.title = meta;
+  }
+}
+
 const queriesHtml = (queries, since) => `${queries.map((q) => `<q>${esc(q)}</q>`).join(', ')}${since ? `, published since ${esc(since)}` : ''}`;
 
 function paintFoot(turn, message, claims) {
@@ -233,12 +269,12 @@ function paintFoot(turn, message, claims) {
     const cited = citedNumbers(message.content);
     const citedCount = sources.filter((s) => cited.has(s.n)).length;
     foot.append(
-      el(`<details class="fold sources"><summary>Sources<span class="fold__meta">${citedCount} cited, ${sources.length} read</span></summary><div class="fold__body">${sourcesTable(sources, cited)}</div></details>`),
+      el(`<details class="fold sources"><summary>sources<span class="fold__meta">${citedCount} cited, ${sources.length} read</span></summary><div class="fold__body">${sourcesTable(sources, cited)}</div></details>`),
     );
   }
   if (claims?.length) {
     foot.append(
-      el(`<details class="fold ledger" open><summary>Remembered<span class="fold__meta">${claims.length} ${claims.length === 1 ? 'claim' : 'claims'}, as of ${esc(formatDay(claims[0].asOf + 'T12:00:00'))}</span></summary>
+      el(`<details class="fold ledger" open><summary>remembered<span class="fold__meta">${claims.length} ${claims.length === 1 ? 'claim' : 'claims'}, as of ${esc(formatDay(claims[0].asOf + 'T12:00:00'))}</span></summary>
         <div class="fold__body"><p class="ledger__note">Ask later whether these still hold, and I will check each one again.</p>${ledgerTable(claims, domainOf)}</div></details>`),
     );
   }
@@ -247,6 +283,15 @@ function paintFoot(turn, message, claims) {
 function paintStoredTurn(user, answer, conversation) {
   const turn = turnShell(user);
   if (answer) {
+    const recalled = answer.recalled ?? [];
+    const searches = answer.searches ?? [];
+    const queries = searches.reduce((n, x) => n + x.queries.length, 0);
+    const pages = searches.reduce((n, x) => n + x.results, 0);
+    const claims = conversation.claims.filter((k) => k.messageId === answer.id);
+    step(turn, 'recall', recalled.length ? 'done' : 'skipped', recalled.length ? `${recalled.length} past` : 'nothing needed');
+    step(turn, 'search', searches.length ? 'done' : 'skipped', searches.length ? `${queries} queries, ${pages} pages` : 'not needed');
+    step(turn, 'answer', 'done', answer.ms ? seconds(answer.ms) : '');
+    step(turn, 'remember', claims.length ? 'done' : 'skipped', claims.length ? `${claims.length} claims` : 'nothing to keep');
     const titles = new Map(state.conversations.map((c) => [c.id, c.title]));
     for (const id of answer.recalled ?? []) {
       trailItem(turn, 'Recalled', `<a href="#/c/${esc(id)}">${esc(titles.get(id) || 'a past conversation')}</a>`);
@@ -254,9 +299,8 @@ function paintStoredTurn(user, answer, conversation) {
     for (const s of answer.searches ?? []) {
       trailItem(turn, 'Searched', queriesHtml(s.queries, s.since), s.cached ? 'cached' : `${s.results} pages, ${seconds(s.ms)}`);
     }
-    if (answer.ms) trailItem(turn, 'Answered', `${formatDay(answer.at)}, ${formatTime(answer.at)}`, seconds(answer.ms));
     renderAnswer(turn.querySelector('.answer'), answer.content, new Map((answer.sources ?? []).map((s) => [s.n, s])));
-    paintFoot(turn, answer, conversation.claims.filter((k) => k.messageId === answer.id));
+    paintFoot(turn, answer, claims);
   }
   return turn;
 }
@@ -291,6 +335,7 @@ async function route() {
     return;
   }
   state.currentId = decodeURIComponent(m[1]);
+  setView('chat');
   paintMemory();
   thread().innerHTML = `<div class="skeleton" aria-hidden="true"><i></i><i></i><i></i></div>`;
   try {
@@ -302,7 +347,7 @@ async function route() {
     paintConversation(c);
     window.scrollTo({ top: document.body.scrollHeight });
   } catch {
-    thread().innerHTML = `<div class="failure"><p>Could not load that conversation. Is the server still running?</p><button class="btn" type="button" data-action="reload">Try again</button></div>`;
+    thread().innerHTML = `<div class="failure"><p>Could not load that conversation. Is the server still running?</p><button class="pill" type="button" data-action="reload">Try again</button></div>`;
   }
 }
 
@@ -312,10 +357,8 @@ function setComposer({ disabled = false, busy = false } = {}) {
   const send = $('#send');
   ask.disabled = disabled;
   send.disabled = disabled;
-  send.textContent = busy ? 'Stop' : 'Ask';
-  send.classList.toggle('btn--primary', !busy);
-  send.classList.toggle('btn--quiet', busy);
   send.setAttribute('aria-busy', String(busy));
+  send.setAttribute('aria-label', busy ? 'Stop' : 'Ask');
 }
 
 const nearBottom = () => window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 160;
@@ -326,6 +369,7 @@ async function ask(text) {
   state.busy = true;
   setComposer({ busy: true });
   if (!state.currentId) thread().innerHTML = '';
+  setView('chat');
 
   const now = clock.now();
   const turn = turnShell({ content: text, at: now.toISOString() });
@@ -348,7 +392,10 @@ async function ask(text) {
   };
 
   answerEl.setAttribute('aria-busy', 'true');
-  const working = trailItem(turn, 'Reading', 'memory and the question', '', 'working');
+  step(turn, 'recall', 'active', 'reading memory');
+  let queryCount = 0;
+  let pageCount = 0;
+  const searchStarted = Date.now();
   const ac = new AbortController();
   state.abort = ac;
 
@@ -365,7 +412,8 @@ async function ask(text) {
           break;
         }
         case 'recall': {
-          working.remove();
+          step(turn, 'recall', ev.hits.length ? 'done' : 'skipped', ev.hits.length ? `${ev.hits.length} past` : ev.windows.length ? 'nothing that day' : 'nothing needed');
+          step(turn, 'answer', 'active', 'thinking');
           for (const w of ev.windows) {
             trailItem(turn, w.alternative ? 'Or' : 'Dated', `<q>${esc(w.phrase)}</q> as ${esc(w.label)}`);
           }
@@ -377,11 +425,17 @@ async function ask(text) {
           break;
         }
         case 'search': {
+          queryCount += ev.queries.length;
+          step(turn, 'search', 'active', `${queryCount} ${queryCount === 1 ? 'query' : 'queries'}`);
+          step(turn, 'answer', '', '');
           searchRows.set(ev.id, trailItem(turn, 'Searching', queriesHtml(ev.queries, ev.since), '', 'working'));
           break;
         }
         case 'results': {
           for (const s of ev.sources) sources.set(s.n, s);
+          pageCount = sources.size;
+          step(turn, 'search', ev.error ? 'failed' : 'done', ev.error ? 'failed' : `${queryCount} queries, ${pageCount} pages, ${seconds(Date.now() - searchStarted)}`);
+          step(turn, 'answer', 'active', 'writing');
           const row = searchRows.get(ev.id);
           if (row) {
             row.removeAttribute('data-state');
@@ -403,7 +457,8 @@ async function ask(text) {
           break;
         }
         case 'text': {
-          working.remove();
+          if (turn.querySelector('.pipe [data-step="search"]').dataset.state === undefined) step(turn, 'search', 'skipped', 'not needed');
+          step(turn, 'answer', 'active', 'writing');
           draft += ev.text;
           schedule();
           break;
@@ -414,7 +469,8 @@ async function ask(text) {
           for (const s of ev.message.sources ?? []) sources.set(s.n, s);
           renderAnswer(answerEl, draft, sources);
           answerEl.removeAttribute('aria-busy');
-          trailItem(turn, 'Answered', '', seconds(ev.message.ms ?? 0));
+          step(turn, 'answer', 'done', seconds(ev.message.ms ?? 0));
+          step(turn, 'remember', 'active', 'reading the answer');
           paintFoot(turn, ev.message, []);
           turn.dataset.messageId = ev.message.id;
           $('#announcer').textContent = 'Answer ready.';
@@ -425,14 +481,15 @@ async function ask(text) {
         case 'remembered': {
           const done = { content: draft, sources: [...sources.values()] };
           if (ev.claims?.length) paintFoot(turn, done, ev.claims);
+          step(turn, 'remember', ev.claims?.length ? 'done' : 'skipped', ev.claims?.length ? `${ev.claims.length} claims` : 'nothing to keep');
           await refreshMemory();
           break;
         }
         case 'error': {
-          working.remove();
+          for (const li of turn.querySelectorAll('.pipe [data-state="active"]')) step(turn, li.dataset.step, 'failed', 'failed');
           answerEl.removeAttribute('aria-busy');
           turn.querySelector('.turn__foot').replaceChildren(
-            el(`<div class="failure"><p>${esc(ev.message)}</p><button class="btn" type="button" data-retry="${esc(text)}">Try again</button></div>`),
+            el(`<div class="failure"><p>${esc(ev.message)}</p><button class="pill" type="button" data-retry="${esc(text)}">Try again</button></div>`),
           );
           break;
         }
@@ -441,12 +498,14 @@ async function ask(text) {
   } catch (err) {
     if (!ac.signal.aborted) {
       turn.querySelector('.turn__foot').replaceChildren(
-        el(`<div class="failure"><p>The connection to the server dropped. Your question was saved.</p><button class="btn" type="button" data-retry="${esc(text)}">Try again</button></div>`),
+        el(`<div class="failure"><p>The connection to the server dropped. Your question was saved.</p><button class="pill" type="button" data-retry="${esc(text)}">Try again</button></div>`),
       );
     }
   } finally {
-    working.remove();
     answerEl.removeAttribute('aria-busy');
+    // A stream that ended without 'remembered' (no claims to keep, or stopped) settles the last step.
+    const remember = turn.querySelector('.pipe [data-step="remember"]');
+    if (remember.dataset.state === 'active') step(turn, 'remember', 'skipped', 'nothing to keep');
     state.busy = false;
     state.abort = null;
     setComposer();
@@ -514,8 +573,19 @@ function wire() {
   setInterval(paintClock, 30_000);
 }
 
+/** What the vortex orbits: the composer, with a reach and energy that ease between views. */
+function cosmosTarget() {
+  const composer = $('#composer');
+  const welcome = document.body.dataset.view === 'welcome';
+  const goal = welcome ? { reach: 200, energy: 1, glow: 1 } : { reach: 60, energy: 0.55, glow: 0.4 };
+  const t = (cosmosTarget.now ??= { ...goal });
+  for (const k of ['reach', 'energy', 'glow']) t[k] += (goal[k] - t[k]) * 0.06;
+  return { rect: composer.getBoundingClientRect(), ...t };
+}
+
 async function boot() {
   wire();
+  startCosmos($('#cosmos'), cosmosTarget);
   paintClock();
   try {
     state.status = await api.status();

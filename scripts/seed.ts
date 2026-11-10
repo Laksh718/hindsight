@@ -75,7 +75,24 @@ const dataDir = recordDir ? await mkdtemp(path.join(tmpdir(), 'hindsight-record-
 const store = await new MemoryStore(dataDir).load();
 const deps = { store, recaller: new Recaller(store), llm: new LlmClient(config.llm!), search: new TavilySearch(config.tavilyKey!) };
 
+// Free tiers allow a handful of requests a minute, and one turn makes two or three.
+const PACE_MS = Number(process.env.SEED_PACE_MS ?? 15_000);
+let turnsRun = 0;
+
+/** A recording should not keep a rate-limit error: retry the turn after a pause. */
 async function turn(text: string, when: Date, simulated: boolean) {
+  for (let attempt = 1; ; attempt++) {
+    const r = await turnOnce(text, when, simulated);
+    const failed = r.events.some((x) => x.e.type === 'error');
+    if (!failed || attempt >= 3) return r;
+    console.log(`  (failed, retrying in 60 s)`);
+    await store.delete(r.conversationId);
+    await new Promise((res) => setTimeout(res, 60_000));
+  }
+}
+
+async function turnOnce(text: string, when: Date, simulated: boolean) {
+  if (turnsRun++) await new Promise((r) => setTimeout(r, PACE_MS));
   const events: Array<{ t: number; e: AgentEvent }> = [];
   const started = Date.now();
   let conversationId = '';
