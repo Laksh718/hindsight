@@ -51,7 +51,7 @@ a:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; bo
 .site-bar nav a[aria-current="page"] { color: var(--color-ink); }
 
 /* Hero: the logo is the mass */
-.hero { display: grid; justify-items: center; align-content: center; gap: var(--space-lg); min-height: clamp(30rem, 66svh, 44rem); padding-block: var(--space-xl); text-align: center; }
+.hero { display: grid; justify-items: center; align-content: center; gap: var(--space-lg); min-height: clamp(28rem, 60svh, 40rem); padding-block: var(--space-lg); text-align: center; }
 .hero__logo { max-width: none; font-size: clamp(4.5rem, 15vw, 12rem); line-height: 0.9; letter-spacing: -0.065em; font-weight: 600; padding: 0 0.08em 0.08em; }
 .hero__logo .logo__dot { color: var(--color-signal); }
 .hero__line { max-width: 38ch; font-size: var(--text-lg); line-height: 1.45; color: var(--color-ink-2); }
@@ -60,7 +60,7 @@ a:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; bo
 .hero__actions { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--space-sm); }
 
 /* Sections */
-.section { padding-block: var(--section-gap-l); }
+.section { padding-block: var(--section-gap-s); }
 .hero + .section { padding-top: var(--space-lg); }
 .section__head { display: grid; gap: var(--space-sm); max-width: 40rem; margin-bottom: var(--space-xl); }
 .section__head h2 { font-size: clamp(2rem, 4vw, 3.2rem); line-height: 1.02; letter-spacing: -0.045em; }

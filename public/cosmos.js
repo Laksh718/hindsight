@@ -79,59 +79,6 @@ vec4 star(vec2 u, vec2 cell, float density, float size, vec2 tdir, float stretch
 
 const float PI = 3.14159265;
 
-// Arc-length position along the rounded rectangle's outline, clockwise from its top-left.
-float outline(vec2 p, vec2 hb, float r) {
-  float a = hb.x - r, b = hb.y - r;
-  vec2 c = clamp(p, vec2(-a, -b), vec2(a, b));
-  vec2 v = p - c;
-  float th = atan(v.y, v.x);
-  float q = PI * 0.5 * r;
-  if (v.y > 0.0 && abs(v.x) < 0.001) return p.x + a;
-  if (v.x > 0.0 && abs(v.y) < 0.001) return 2.0 * a + q + (b - p.y);
-  if (v.y < 0.0 && abs(v.x) < 0.001) return 2.0 * a + 2.0 * q + 2.0 * b + (a - p.x);
-  if (v.x < 0.0 && abs(v.y) < 0.001) return 4.0 * a + 3.0 * q + 2.0 * b + (p.y + b);
-  if (v.x >= 0.0 && v.y >= 0.0) return 2.0 * a + r * (PI * 0.5 - th);
-  if (v.x >= 0.0) return 2.0 * a + q + 2.0 * b + r * (-th);
-  if (v.y < 0.0) return 4.0 * a + 2.0 * q + 2.0 * b + r * (-PI * 0.5 - th);
-  return 4.0 * a + 3.0 * q + 4.0 * b + r * (PI - th);
-}
-
-// The infall: stars on a grid in log-polar coordinates around the mass, falling inward.
-// x is the position around the outline (0..1), y is log(distance): equal steps in y are
-// equal ratios of distance, so stars are large and fast near the screen's edge and tiny
-// and dense near the horizon. Moving the grid in y over time makes everything fall in.
-vec3 infall(vec2 rel, float d, vec2 hb, float r, vec3 ink, vec3 cool, vec3 warm) {
-  float period = 4.0 * (hb.x - r) + 4.0 * (hb.y - r) + 2.0 * PI * r;
-  const float AROUND = 150.0;   // cells around the mass
-  const float PER_E = 7.0;      // cells per e-fold of distance
-  const float K = 16.0;         // softening at the horizon, px
-  float L = log(d + K);
-  float around = outline(rel, hb, r) / period;
-  // A slow spiral: inner stars lag a little in angle as they fall.
-  float twist = uFall * 0.004 + 0.18 / L;
-  vec2 g = vec2(fract(around + twist) * AROUND, (L + uFall * 0.32) * PER_E);
-  vec3 total = vec3(0.0);
-  for (int j = 0; j < 2; j++) {                     // this row and the next: streaks cross rows
-    vec2 id = vec2(floor(g.x), floor(g.y) + float(j));
-    vec2 h = hash2(vec2(mod(id.x, AROUND), id.y));
-    if (hash(id + 2.7) < 0.62) continue;
-    vec2 pos = vec2(0.1 + 0.8 * h.x, 0.1 + 0.8 * h.y);
-    vec2 off = vec2(g.x - id.x - pos.x, g.y - id.y - pos.y);
-    // Grid units to pixels at this distance.
-    float cellAround = (period + 2.0 * PI * d) / AROUND;
-    float cellOut = (d + K) / PER_E;
-    float streak = 1.0 + uWarp * 5.0;               // faster fall, longer radial streaks
-    vec2 px = vec2(off.x * cellAround, off.y * cellOut / streak);
-    float size = mix(0.55, 1.9, smoothstep(0.0, 900.0, d)) * (0.6 + 0.8 * h.x);
-    float b = exp(-dot(px, px) / (size * size)) * (0.35 + 0.65 * h.y);
-    float k = hash(id + 9.7);
-    total += b * (k > 0.82 ? warm : (k > 0.55 ? cool : ink));
-  }
-  // Fade in from far away, burn out at the horizon.
-  float fade = smoothstep(log(K) + 0.25, log(K) + 1.4, L) * (1.0 - smoothstep(log(1500.0), log(2600.0), L));
-  return total * fade;
-}
-
 float sdRoundBox(vec2 p, vec2 b, float r) {
   vec2 q = abs(p) - b + r;
   return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
@@ -169,25 +116,39 @@ void main() {
   vec2 tdir = boxPull >= mousePull ? tBox : tMouse;
   float stretch = 1.0 + min(boxPull + mousePull, 1.0) * 4.5; // a short arc, never a line
 
-  float bright = 0.0;
+  // The black hole. The whole sky falls in: each of two layers zooms the star
+  // field toward the mass (stars move inward, shrink and dim as they go deeper)
+  // and turns it, faster near the centre, so the fall is a spiral. The layers
+  // are half a cycle apart and fade in and out, so the fall loops forever with
+  // no seam, and the twist resets each cycle instead of winding into smears.
+  vec2 q = src - uBox.xy;
+  float r = length(q);
   vec3 tint = vec3(0.0);
-  for (int i = 0; i < 4; i++) {
-    float depth = float(i) + 1.0;
-    vec2 u = src - parallax * 0.03 * depth + vec2(2.5 * depth, 0.8 * depth) * uDrift;
-    vec4 s = star(u, vec2(30.0 + 26.0 * depth), 0.55, 0.65 + 0.4 * depth, tdir, stretch);
-    float tw = 0.82 + 0.18 * sin(uTime * (0.4 + s.z * 1.4) + s.w * 6.2831);   // a gentle twinkle
-    float b = s.x * tw * (0.55 + 0.3 * depth);
-    bright += b;
-    tint += b * (s.y > 1.5 ? uWarm : (s.y > 0.5 ? uCool : uInk));
+  for (int k = 0; k < 2; k++) {
+    float phase = fract(uFall * 0.16 + float(k) * 0.5);
+    float zoom = exp(phase * 1.3863);                         // 1x to 4x across a cycle
+    float w = sin(phase * PI);                                // fade in, fade out
+    float turn = phase * (0.25 + 140.0 / (r + 120.0));        // inner stars turn faster
+    float cs = cos(turn);
+    float sn = sin(turn);
+    vec2 zq = vec2(cs * q.x - sn * q.y, sn * q.x + cs * q.y) * zoom + float(k) * vec2(731.0, 377.0);
+    for (int i = 0; i < 3; i++) {
+      float depth = float(i) + 1.0;
+      vec2 u = zq - parallax * 0.012 * depth;
+      vec4 s = star(u, vec2(44.0 + 30.0 * depth), 0.5, (0.75 + 0.45 * depth) * sqrt(zoom), tdir, stretch);
+      float tw = 0.85 + 0.15 * sin(uTime * (0.4 + s.z * 1.4) + s.w * 6.2831);
+      float b = s.x * tw * (0.55 + 0.28 * depth) * w;
+      tint += b * (s.y > 1.5 ? uWarm : (s.y > 0.5 ? uCool : uInk));
+    }
   }
+  // Stars vanish as they cross the horizon: the mass's edge.
+  tint *= smoothstep(0.0, 90.0, dd);
   // Lensing concentrates light: squeezed, stretched stars near an edge shine brighter.
-  tint *= 1.0 + min(boxPull + mousePull, 1.2) * 1.4;
-
-  // A hairline of light on the rim, and a soft falloff just outside it.
-  float rim = d > 0.0 ? exp(-d / 1.4) * (0.35 + 0.4 * uFocus) * uGlow * uRim : 0.0;
-  // The fall: a second sky, pouring into the mass.
-  if (d > 0.0) tint += infall(rel, d, uBox.zw, uRadius, uInk, uCool, uWarm) * uGlow * (0.75 + 0.5 * uWarp);
+  tint *= 1.0 + min(boxPull + mousePull, 1.2) * 1.1;
   tint *= uDim;
+
+  // A hairline of light on the rim (the composer only).
+  float rim = d > 0.0 ? exp(-d / 1.4) * (0.35 + 0.4 * uFocus) * uGlow * uRim : 0.0;
 
   // Faint dust: large, slow, uneven light, so black is never flat.
   float dust = vnoise(src / 380.0 + uDrift * 0.01) * vnoise(src / 160.0 - 3.0);
@@ -230,7 +191,10 @@ export function startCosmos(canvas, getTarget) {
     if (!gl.getProgramParameter(program, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(program) ?? 'link');
   } catch (err) {
     console.warn('[cosmos] WebGL unavailable, using the flat version:', err);
-    return startFlat(canvas, getTarget);
+    // A canvas that has a WebGL context cannot give a 2D one: swap in a fresh canvas.
+    const fresh = canvas.cloneNode(false);
+    canvas.replaceWith(fresh);
+    return startFlat(fresh, getTarget);
   }
   gl.useProgram(program);
   const buf = gl.createBuffer();
@@ -278,7 +242,7 @@ export function startCosmos(canvas, getTarget) {
     const target = getTarget();
     time += dt;
     drift += dt * target.energy; // integrated, so a change of speed never makes the sky jump
-    fall += dt * (0.35 + 2.4 * (target.warp ?? 0)) * (still.matches ? 0 : 1);
+    fall += dt * (1 + 3.5 * (target.warp ?? 0)) * (still.matches ? 0 : 1); // about 6 s a cycle, faster while working
     const ease = 1 - Math.exp(-dt * 6);
     mouse.x += (mouse.tx - mouse.x) * ease;
     mouse.y += (mouse.ty - mouse.y) * ease;

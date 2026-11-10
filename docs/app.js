@@ -634,7 +634,7 @@ function cosmosTarget() {
   // A surge when the agent reaches into the past: memory recalled, the sky lurches inward.
   const surge = (state.warpUntil ?? 0) > performance.now() ? 1 : 0;
   const goal = {
-    lens: welcome ? 2200 : 1000,
+    lens: welcome ? 1700 : 800,
     warp: Math.max(state.busy ? 0.7 : 0, surge),
     // Behind a conversation the sky steps back, so text reads first.
     dim: welcome ? 1 : 0.42,
