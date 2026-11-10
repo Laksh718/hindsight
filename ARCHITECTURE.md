@@ -16,6 +16,7 @@ src/
   memory/store.ts           conversations and claims, saved as one snapshot
   memory/persistence.ts     where the snapshot goes: a file locally, Upstash Redis on Vercel
   memory/recall.ts          which past conversations the model sees this turn
+  memory/lexical.ts         a small BM25 index for topic recall
   agent/turn.ts             one turn: save → recall → model/search loop → save → ledger
   agent/prompt.ts           the system prompt and how history is replayed
   agent/web-search-tool.ts  the one tool: schema, argument parsing, citation numbering
