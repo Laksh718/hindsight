@@ -222,7 +222,7 @@ async function paintWelcome() {
   hero.innerHTML = `<h1>It remembers what it told you</h1>
     <p>Ask anything current. Every answer is searched, cited and dated, so later you can ask whether it still holds.</p>`;
   const list = await starters();
-  startersEl.innerHTML = list.map(([label, q]) => `<li><button class="starter" type="button" data-ask="${esc(q)}" title="${esc(q)}">${esc(label)}</button></li>`).join('');
+  startersEl.innerHTML = list.map(([label, q], i) => `<li style="--i:${i}"><button class="starter" type="button" data-ask="${esc(q)}" title="${esc(q)}">${esc(label)}</button></li>`).join('');
   setComposer({ disabled: false });
 }
 
@@ -573,14 +573,21 @@ function wire() {
   setInterval(paintClock, 30_000);
 }
 
-/** What the vortex orbits: the composer, with a reach and energy that ease between views. */
+/** What the lens bends around: the composer's box, plus state that eases between views. */
 function cosmosTarget() {
   const composer = $('#composer');
   const welcome = document.body.dataset.view === 'welcome';
-  const goal = welcome ? { reach: 200, energy: 1, glow: 1 } : { reach: 60, energy: 0.55, glow: 0.4 };
+  const focused = composer.matches(':focus-within');
+  const goal = {
+    reach: welcome ? 240 : 90,
+    glow: welcome ? 1 : 0.55,
+    // The flow quickens while the agent works: the sky shows it is thinking.
+    energy: (state.busy ? 3.2 : 1) * (welcome ? 1 : 0.7),
+    focus: focused ? 1 : 0,
+  };
   const t = (cosmosTarget.now ??= { ...goal });
-  for (const k of ['reach', 'energy', 'glow']) t[k] += (goal[k] - t[k]) * 0.06;
-  return { rect: composer.getBoundingClientRect(), ...t };
+  for (const k of Object.keys(goal)) t[k] += (goal[k] - t[k]) * 0.05;
+  return { rect: composer.getBoundingClientRect(), radius: parseFloat(getComputedStyle(composer).borderTopLeftRadius) || 26, ...t };
 }
 
 async function boot() {

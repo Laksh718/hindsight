@@ -253,6 +253,14 @@ a:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; bo
 .failure p { color: var(--color-ink); }
 .noscript { position: relative; z-index: var(--z-raised); padding: var(--space-lg); }
 
+/* Motion: arrivals only, and only when scripting runs (content is visible without it). */
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } }
+.js [data-view="welcome"] .hero h1 { animation: rise 900ms var(--ease-out) both; }
+.js [data-view="welcome"] .hero p { animation: rise 900ms var(--ease-out) 120ms both; }
+.js .starters li { animation: rise 700ms var(--ease-out) both; animation-delay: calc(260ms + var(--i, 0) * 70ms); }
+.js .turn { animation: rise 520ms var(--ease-out) both; }
+.js .fold { animation: rise 420ms var(--ease-out) both; }
+
 /* Small screens ---------------------------------------------------------- */
 @media (max-width: 40rem) {
   .bar { padding: 0 var(--space-sm); }
@@ -270,6 +278,7 @@ a:focus-visible { outline: 2px solid var(--color-focus); outline-offset: 2px; bo
   .round { --round: 44px; }
 }
 @media (prefers-reduced-motion: reduce) {
+  .js [data-view="welcome"] .hero h1, .js [data-view="welcome"] .hero p, .js .starters li, .js .turn, .js .fold { animation: none; }
   .pipe li[data-state="active"]::before { animation: none; }
   .prose[aria-busy="true"] > :last-child::after { animation: none; }
   .js .memory, .js .memory[data-open] { transition: opacity 150ms linear; }
