@@ -74,7 +74,7 @@ function linkCitations(root, sources) {
           a.setAttribute('aria-label', `Source ${n}: ${s.title}`);
           sup.append(a);
         } else {
-          sup.textContent = n;
+          continue; // a number with no source behind it is not shown
         }
         frag.append(sup);
       }

@@ -8,6 +8,7 @@
  */
 import { LiveApi, ReplayApi } from './api.js';
 import { el, esc, renderAnswer, sourcesTable, ledgerTable, citedNumbers } from './render.js';
+import { startCosmos } from './cosmos.js';
 
 const $ = (sel) => document.querySelector(sel);
 // Same UI, three back ends: this server, a hosted API (data-api), or a recording (data-replay).
@@ -87,18 +88,25 @@ const seconds = (ms) => `${(ms / 1000).toFixed(1)} s`;
 /* The bar ---------------------------------------------------------------- */
 function paintClock() {
   const now = clock.now();
-  const button = $('#clock-button');
   const sim = clock.simulated();
-  button.toggleAttribute('data-simulated', sim);
-  $('#clock-label').innerHTML = `${sim ? '<span class="clock__long">Pretending it is </span>' : ''}${dayLabel(now)}<span class="clock__long"> ${now.getFullYear()}${sim ? `, ${formatTime(now)}` : ''}</span>`;
+  $('#clock-button').toggleAttribute('data-simulated', sim);
+  const label = $('#clock-label');
+  label.toggleAttribute('data-simulated', sim);
+  label.textContent = sim ? `Pretending it is ${dayLabel(now)}, ${formatTime(now)}` : dayLabel(now, true);
 }
 
 function paintModel() {
   const s = state.status;
   const line = $('#model-line');
   if (!s) return (line.textContent = '');
-  if (s.replay) return (line.textContent = s.recorded ? `recorded demo, ${s.model?.model ?? ''}` : 'demo');
-  line.textContent = s.model ? `${s.model.model} with ${(s.search ?? 'no').toLowerCase()} search` : 'not configured yet';
+  const chip = $('#model-chip');
+  if (s.replay) {
+    line.textContent = s.recorded ? 'Recorded demo: real answers, replayed' : 'Demo';
+    chip.textContent = s.model?.model ?? '';
+    return;
+  }
+  line.textContent = s.model ? `${s.model.provider} with ${s.search ?? 'no'} search` : 'Not configured yet';
+  chip.textContent = s.model?.model ?? '';
 }
 
 /* Memory sidebar ----------------------------------------------------------- */
@@ -147,7 +155,7 @@ function toggleDrawer(open) {
   const m = $('#memory');
   const next = open ?? !m.hasAttribute('data-open');
   m.toggleAttribute('data-open', next);
-  $('[data-action="toggle-memory"]').setAttribute('aria-expanded', String(next));
+  for (const b of document.querySelectorAll('[data-action="toggle-memory"]')) b.setAttribute('aria-expanded', String(next));
 }
 
 /* The thread -------------------------------------------------------------- */
@@ -170,49 +178,51 @@ async function starters() {
   return [[label, `What did I ask you ${when}? Is your answer still correct today?`], ...base.slice(0, 2)];
 }
 
+/* Views: welcome (composer centred, vortex wide) and chat (composer docked). */
+function setView(view) {
+  const body = document.body;
+  if (body.dataset.view === view) return;
+  const composer = $('#composer');
+  const from = composer.getBoundingClientRect();
+  body.dataset.view = view;
+  // FLIP: the composer glides from where it was to where it now sits; the vortex follows it.
+  const to = composer.getBoundingClientRect();
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches || !from.width) return;
+  composer.animate(
+    [{ transform: `translate(${from.left - to.left}px, ${from.top - to.top}px)` }, { transform: 'none' }],
+    { duration: 620, easing: 'cubic-bezier(0.16, 1, 0.3, 1)' },
+  );
+}
+
 async function paintWelcome() {
   const s = state.status;
+  setView('welcome');
+  thread().innerHTML = '';
+  const hero = $('#hero');
+  const startersEl = $('#starters');
+  startersEl.innerHTML = '';
   if (s && !s.ready) {
-    thread().innerHTML = `<section class="welcome setup">
-      <h1>two free keys, then ask away</h1>
-      <p class="lead">Hindsight needs a model and a search engine. Both have free tiers, no card needed.</p>
-      <ol>
-        <li>Get a Gemini key at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">aistudio.google.com/apikey</a></li>
-        <li>Get a Tavily key at <a href="https://app.tavily.com" target="_blank" rel="noopener noreferrer">app.tavily.com</a></li>
-        <li>Run <code>cp .env.example .env</code>, paste both keys in, and restart <code>npm run dev</code></li>
+    hero.innerHTML = `<h1>Two free keys, then ask away</h1>
+      <p>Hindsight needs a model and a search engine. Both have free tiers, no card needed.</p>
+      <ol class="setup-steps">
+        <li>1. A Gemini key from <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">aistudio.google.com/apikey</a></li>
+        <li>2. A Tavily key from <a href="https://app.tavily.com" target="_blank" rel="noopener noreferrer">app.tavily.com</a></li>
+        <li>3. <code>cp .env.example .env</code>, paste both, restart <code>npm run dev</code></li>
       </ol>
-      ${s.problems.map((p) => `<p class="setup__problem">${esc(p)}</p>`).join('')}
-    </section>`;
+      ${s.problems.map((p) => `<p class="problem">${esc(p)}</p>`).join('')}`;
     setComposer({ disabled: true });
     return;
   }
   if (s?.replay && !s.recorded) {
-    thread().innerHTML = `<section class="welcome setup">
-      <h1>the recorded demo is on its way</h1>
-      <p class="lead">This page replays real Hindsight answers with no server. The first session has not been recorded yet. Meanwhile, run it yourself with two free keys.</p>
-      <ol>
-        <li><code>git clone https://github.com/Laksh718/hindsight</code></li>
-        <li><code>npm install</code>, then <code>cp .env.example .env</code> and add a Gemini and a Tavily key</li>
-        <li><code>npm run dev</code> and open <code>localhost:3000</code></li>
-      </ol>
-      <p>How it works: <a href="https://github.com/Laksh718/hindsight/blob/main/DESIGN.md">DESIGN.md</a></p>
-    </section>`;
+    hero.innerHTML = `<h1>The demo is on its way</h1>
+      <p>This page replays real Hindsight answers with no server; the first session is not recorded yet. Run it yourself with two free keys: <code>npm install</code>, add keys to <code>.env</code>, <code>npm run dev</code>.</p>`;
     setComposer({ disabled: true });
     return;
   }
+  hero.innerHTML = `<h1>It remembers what it told you</h1>
+    <p>Ask anything current. Every answer is searched, cited and dated, so later you can ask whether it still holds.</p>`;
   const list = await starters();
-  thread().innerHTML = `<section class="welcome">
-    <h1>it <span class="verb">remembers</span> what it told you</h1>
-    <p class="lead">Ask anything current. Every answer is searched, cited and dated, so later you can ask whether it still holds.</p>
-    <div class="path" role="img" aria-label="How a question is answered: recall memory by date, search the web in parallel, answer with citations, record the claims with today's date.">
-      <div class="path__node"><b>recall</b><span>"last Tuesday" becomes 3 Nov; that day's answers come back</span></div>
-      <div class="path__node"><b>web_search</b><span>up to five queries at once</span></div>
-      <div class="path__node"><b>answer</b><span>streamed, every fact cited</span></div>
-      <div class="path__node" data-key><b>ledger</b><span>claims saved with today's date</span></div>
-      <div class="path__node"><b>later</b><span>"still true?" rechecks each claim</span></div>
-    </div>
-    <ul class="starters">${list.map(([label, q]) => `<li><button class="starter" type="button" data-ask="${esc(q)}" title="${esc(q)}">${esc(label.toLowerCase())}</button></li>`).join('')}</ul>
-  </section>`;
+  startersEl.innerHTML = list.map(([label, q]) => `<li><button class="starter" type="button" data-ask="${esc(q)}" title="${esc(q)}">${esc(label)}</button></li>`).join('');
   setComposer({ disabled: false });
 }
 
@@ -325,6 +335,7 @@ async function route() {
     return;
   }
   state.currentId = decodeURIComponent(m[1]);
+  setView('chat');
   paintMemory();
   thread().innerHTML = `<div class="skeleton" aria-hidden="true"><i></i><i></i><i></i></div>`;
   try {
@@ -346,9 +357,8 @@ function setComposer({ disabled = false, busy = false } = {}) {
   const send = $('#send');
   ask.disabled = disabled;
   send.disabled = disabled;
-  send.textContent = busy ? 'stop' : 'ask';
-  send.classList.toggle('pill--primary', !busy);
   send.setAttribute('aria-busy', String(busy));
+  send.setAttribute('aria-label', busy ? 'Stop' : 'Ask');
 }
 
 const nearBottom = () => window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 160;
@@ -359,6 +369,7 @@ async function ask(text) {
   state.busy = true;
   setComposer({ busy: true });
   if (!state.currentId) thread().innerHTML = '';
+  setView('chat');
 
   const now = clock.now();
   const turn = turnShell({ content: text, at: now.toISOString() });
@@ -562,8 +573,19 @@ function wire() {
   setInterval(paintClock, 30_000);
 }
 
+/** What the vortex orbits: the composer, with a reach and energy that ease between views. */
+function cosmosTarget() {
+  const composer = $('#composer');
+  const welcome = document.body.dataset.view === 'welcome';
+  const goal = welcome ? { reach: 200, energy: 1, glow: 1 } : { reach: 60, energy: 0.55, glow: 0.4 };
+  const t = (cosmosTarget.now ??= { ...goal });
+  for (const k of ['reach', 'energy', 'glow']) t[k] += (goal[k] - t[k]) * 0.06;
+  return { rect: composer.getBoundingClientRect(), ...t };
+}
+
 async function boot() {
   wire();
+  startCosmos($('#cosmos'), cosmosTarget);
   paintClock();
   try {
     state.status = await api.status();

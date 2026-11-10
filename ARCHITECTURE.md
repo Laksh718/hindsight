@@ -97,7 +97,9 @@ Temporal features are otherwise untestable in a weekend. You cannot wait until M
 
 ## The UI
 
-Designed with the Hallmark skill, Lumen theme: a violet-black ground, Instrument Serif headings in lowercase, Geist for text, Geist Mono for measured values, one brass signal and one rose verb. Each answer shows:
+Designed with the Hallmark skill, in a custom direction taken from a reference video: pure black, a slow starfield, a centred grotesk head (Geist) and one large composer. The signature is the vortex (`public/cosmos.js`): stars orbit the composer on superellipse paths, the shape of a rounded rectangle, faster near its edge. The canvas reads the composer's box every frame, so when the first question is asked and the composer glides to its dock (a FLIP animation), the vortex follows it. It is decorative only (`aria-hidden`), pauses when the tab is hidden, and draws one still frame under reduced motion. Coral is the one signal colour, kept for change: "Changed" in a recheck table, and the clock while time-travelling.
+
+Each answer shows:
 
 - **the pipeline:** recall, search, answer, remember. Each step lights brass when its event arrives and settles with its real readout ("4 queries, 19 pages, 3.1 s"). It is the agent's event stream drawn as it happens, not an animation;
 - **the trail:** specifics under the pipeline: which dates were read, which past conversations were recalled, the exact queries;
@@ -105,7 +107,7 @@ Designed with the Hallmark skill, Lumen theme: a violet-black ground, Instrument
 - **sources:** cited first, then the rest that were read;
 - **remembered:** the claims ledger for that answer.
 
-Memory is a spine of days in the sidebar (a drawer on phones). States covered: setup (missing keys), loading (skeletons), empty (welcome, with the real pipeline drawn on a blueprint grid), error (inline, with retry), streaming, full, and replay.
+Memory is a spine of days in a drawer opened from the top bar. States covered: setup (missing keys), loading (skeletons), empty (welcome, with the real pipeline drawn on a blueprint grid), error (inline, with retry), streaming, full, and replay.
 
 ## Testing
 

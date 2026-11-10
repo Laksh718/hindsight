@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { MemoryStore } from '../src/memory/store.ts';
 import { Recaller } from '../src/memory/recall.ts';
-import { runTurn, type AgentEvent } from '../src/agent/turn.ts';
+import { runTurn, stripUnknownCitations, type AgentEvent } from '../src/agent/turn.ts';
 import type { ChatMessage, LlmClient, StreamEvent } from '../src/llm/client.ts';
 import type { SearchProvider } from '../src/search/tavily.ts';
 
@@ -131,4 +131,11 @@ test('model errors reach the user as an error event, and the question is still s
   await runTurn({ store, recaller: new Recaller(store), llm: broken, search: fakeSearch }, { text: 'hi', now: new Date(), tz: TZ }, (e) => events.push(e));
   assert.equal(events.at(-1)?.type, 'error');
   assert.equal(store.all()[0]!.messages[0]!.content, 'hi');
+});
+
+test('citations that match no source read this turn are removed', () => {
+  const known = new Set([1, 2]);
+  assert.equal(stripUnknownCitations('Neon is $0 [1][3]. Supabase is $25 [10].', known), 'Neon is $0 [1]. Supabase is $25.');
+  assert.equal(stripUnknownCitations('Both [1, 2, 7].', known), 'Both [1][2].');
+  assert.equal(stripUnknownCitations('No sources here [4].', new Set()), 'No sources here.');
 });

@@ -143,6 +143,9 @@ export async function runTurn(deps: AgentDeps, input: TurnInput, emit: (e: Agent
     }
   }
 
+  // A citation must point at a page read in this turn. Anything else is invented, so it goes.
+  answer = stripUnknownCitations(answer, new Set(book.all().map((s) => s.n)));
+
   if (!answer.trim() && !signal?.aborted) {
     answer = 'I could not put an answer together that time. Please try again, or rephrase the question.';
     emit({ type: 'text', text: answer });
@@ -176,4 +179,13 @@ export async function runTurn(deps: AgentDeps, input: TurnInput, emit: (e: Agent
       }
     }
   }
+}
+
+/** Remove [n] markers (and [n, m] lists) whose numbers match no source read this turn. */
+export function stripUnknownCitations(text: string, known: Set<number>): string {
+  return text.replace(/\s?\[(\d+(?:\s*,\s*\d+)*)\]/g, (match, list: string) => {
+    const kept = list.split(',').map((n) => Number(n.trim())).filter((n) => known.has(n));
+    if (!kept.length) return '';
+    return match.replace(/\[.*\]/, kept.map((n) => `[${n}]`).join(''));
+  });
 }
