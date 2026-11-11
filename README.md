@@ -6,7 +6,7 @@ A chat agent with one tool, web search, and a dated memory. It cites what it fin
 >
 > Hindsight reads "last Tuesday" as Tue 3 Nov, recalls that conversation and the prices it recorded, searches each one again in parallel, and answers with a Then / Now table.
 
-**Live:** https://hindsight-laksh.vercel.app (the agent at `/chat`, a real turn replayed through the architecture at `/how`)
+**Live:** https://hindsightx.vercel.app (the agent at `/chat`, a real turn replayed through the architecture at `/how`)
 
 Built by [Laksh](https://laksh.codes).
 
